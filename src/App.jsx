@@ -6,7 +6,7 @@ import NewsFeed from "./pages/NewsFeed";
 import Signals from "./pages/Signals";
 import Trader from "./pages/Trader";
 import Chat from "./pages/Chat";
-import "./App.css";
+import "./styles/globals.css";
 
 const TABS = [
   { id: "watchlist", label: "Watchlist",   icon: "📊" },
