@@ -34,51 +34,33 @@ const ALL_TICKERS = [
   { symbol: "XOM",   tv: "NYSE:XOM",       name: "ExxonMobil",        type: "STOCK", sector: "Energy" },
 ];
 
-// ── Yahoo Finance price fetcher (free, no API key) ────────────────────────────
-const YF_PROXY = "https://corsproxy.io/?";
+// ── Price fetcher via your GCP backend (proxies Yahoo Finance, no CORS) ───────
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+async function fetchBatchPrices(symbols) {
+  try {
+    const joined = symbols.join(",");
+    const res = await fetch(`${API}/api/quote/batch/${joined}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();  // { AAPL: {...}, MSFT: {...}, ... }
+  } catch (e) {
+    console.error("Batch price fetch failed:", e.message);
+    return {};
+  }
+}
 
 async function fetchYahooPrice(symbol) {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2d&includePrePost=true`;
   try {
-    const res = await fetch(`${YF_PROXY}${encodeURIComponent(url)}`);
-    const json = await res.json();
-    const result = json?.chart?.result?.[0];
-    if (!result) return null;
-
-    const meta   = result.meta;
-    const price  = meta.regularMarketPrice;
-    const prev   = meta.chartPreviousClose || meta.previousClose;
-    const change = prev ? ((price - prev) / prev) * 100 : 0;
-    const changeAmt = prev ? price - prev : 0;
-
-    // Pre/post market data
-    const preMarket  = meta.preMarketPrice;
-    const postMarket = meta.postMarketPrice;
-    const extPrice   = postMarket || preMarket;
-    const extChange  = extPrice ? ((extPrice - price) / price) * 100 : null;
-
-    return {
-      symbol,
-      price:       round(price),
-      open:        round(meta.regularMarketOpen || price),
-      high:        round(meta.regularMarketDayHigh || price),
-      low:         round(meta.regularMarketDayLow || price),
-      volume:      meta.regularMarketVolume || 0,
-      prev_close:  round(prev || price),
-      change_pct:  round(change),
-      change_amt:  round(changeAmt),
-      mkt_cap:     meta.marketCap,
-      currency:    meta.currency || "USD",
-      // Extended hours
-      pre_market:  preMarket  ? round(preMarket)  : null,
-      post_market: postMarket ? round(postMarket) : null,
-      ext_price:   extPrice   ? round(extPrice)   : null,
-      ext_change:  extChange  ? round(extChange)  : null,
-      market_state: meta.marketState, // PRE, REGULAR, POST, CLOSED
-      timestamp:   new Date().toISOString(),
-    };
+    const res = await fetch(`${API}/api/quote/${symbol}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    // Add computed ext_change
+    if (data.ext_price && data.price) {
+      data.ext_change = round(((data.ext_price - data.price) / data.price) * 100);
+    }
+    return data;
   } catch (e) {
-    console.error(`Yahoo fetch failed for ${symbol}:`, e.message);
+    console.error(`Price fetch failed for ${symbol}:`, e.message);
     return null;
   }
 }
@@ -103,7 +85,7 @@ const tvSymbolInfo = (sym) =>
 const tvFinancials = (sym) =>
   `https://www.tradingview.com/embed-widget/financials/?symbol=${encodeURIComponent(sym)}&colorTheme=dark&isTransparent=true&displayMode=regular&locale=en`;
 
-// ── Yahoo Finance price hook ──────────────────────────────────────────────────
+// ── Yahoo Finance price hook (via backend proxy) ──────────────────────────────
 function useYahooPrices(watchlist) {
   const [prices, setPrices]   = useState({});
   const [loading, setLoading] = useState(true);
@@ -112,28 +94,28 @@ function useYahooPrices(watchlist) {
 
   const fetchAll = useCallback(async () => {
     try {
-      // Fetch all tickers in parallel
-      const results = await Promise.allSettled(
-        watchlist.map(sym => fetchYahooPrice(sym))
-      );
-      const updated = {};
-      results.forEach((r, i) => {
-        if (r.status === "fulfilled" && r.value) {
-          updated[watchlist[i]] = r.value;
-        }
-      });
-      setPrices(prev => ({ ...prev, ...updated }));
-      setLastUpdate(new Date());
-      setStatus("live");
-      setLoading(false);
+      // Use batch endpoint — one request for all tickers
+      const data = await fetchBatchPrices(watchlist);
+      if (Object.keys(data).length > 0) {
+        // Add ext_change for each
+        Object.values(data).forEach(p => {
+          if (p.ext_price && p.price) {
+            p.ext_change = round(((p.ext_price - p.price) / p.price) * 100);
+          }
+        });
+        setPrices(prev => ({ ...prev, ...data }));
+        setLastUpdate(new Date());
+        setStatus("live");
+        setLoading(false);
+      }
     } catch (e) {
       setStatus("error");
+      setLoading(false);
     }
   }, [watchlist.join(",")]);
 
   useEffect(() => {
     fetchAll();
-    // Refresh every 60 seconds (Yahoo Finance rate limit friendly)
     const iv = setInterval(fetchAll, 60000);
     return () => clearInterval(iv);
   }, [fetchAll]);
