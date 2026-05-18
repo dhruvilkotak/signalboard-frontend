@@ -1,40 +1,98 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-// All available tickers to choose from
+// ── All available tickers ─────────────────────────────────────────────────────
 const ALL_TICKERS = [
-  { symbol: "SPY",   tv: "AMEX:SPY",       name: "S&P 500 ETF",        type: "ETF",   sector: "Index" },
-  { symbol: "VOO",   tv: "AMEX:VOO",       name: "Vanguard S&P 500",   type: "ETF",   sector: "Index" },
-  { symbol: "QQQ",   tv: "NASDAQ:QQQ",     name: "Nasdaq 100 ETF",     type: "ETF",   sector: "Index" },
-  { symbol: "IWM",   tv: "AMEX:IWM",       name: "Russell 2000 ETF",   type: "ETF",   sector: "Index" },
-  { symbol: "JEPI",  tv: "AMEX:JEPI",      name: "JPMorgan Income",    type: "ETF",   sector: "Income" },
-  { symbol: "JEPQ",  tv: "NASDAQ:JEPQ",    name: "JPMorgan Nasdaq",    type: "ETF",   sector: "Income" },
-  { symbol: "SCHD",  tv: "AMEX:SCHD",      name: "Schwab Dividend",    type: "ETF",   sector: "Dividend" },
-  { symbol: "SGOV",  tv: "AMEX:SGOV",      name: "T-Bills ETF",        type: "ETF",   sector: "Cash" },
-  { symbol: "MSFT",  tv: "NASDAQ:MSFT",    name: "Microsoft",          type: "STOCK", sector: "Tech" },
-  { symbol: "AAPL",  tv: "NASDAQ:AAPL",    name: "Apple",              type: "STOCK", sector: "Tech" },
-  { symbol: "NVDA",  tv: "NASDAQ:NVDA",    name: "Nvidia",             type: "STOCK", sector: "AI" },
-  { symbol: "GOOGL", tv: "NASDAQ:GOOGL",   name: "Alphabet",           type: "STOCK", sector: "Tech" },
-  { symbol: "AMZN",  tv: "NASDAQ:AMZN",    name: "Amazon",             type: "STOCK", sector: "Tech" },
-  { symbol: "META",  tv: "NASDAQ:META",    name: "Meta Platforms",     type: "STOCK", sector: "Tech" },
-  { symbol: "TSLA",  tv: "NASDAQ:TSLA",    name: "Tesla",              type: "STOCK", sector: "EV" },
-  { symbol: "HOOD",  tv: "NASDAQ:HOOD",    name: "Robinhood",          type: "STOCK", sector: "Fintech" },
-  { symbol: "AMD",   tv: "NASDAQ:AMD",     name: "AMD",                type: "STOCK", sector: "AI" },
-  { symbol: "INTC",  tv: "NASDAQ:INTC",    name: "Intel",              type: "STOCK", sector: "Tech" },
-  { symbol: "PLTR",  tv: "NYSE:PLTR",      name: "Palantir",           type: "STOCK", sector: "AI" },
-  { symbol: "COIN",  tv: "NASDAQ:COIN",    name: "Coinbase",           type: "STOCK", sector: "Crypto" },
-  { symbol: "SOFI",  tv: "NASDAQ:SOFI",    name: "SoFi Technologies",  type: "STOCK", sector: "Fintech" },
+  { symbol: "SPY",   tv: "AMEX:SPY",       name: "S&P 500 ETF",       type: "ETF",   sector: "Index" },
+  { symbol: "VOO",   tv: "AMEX:VOO",       name: "Vanguard S&P 500",  type: "ETF",   sector: "Index" },
+  { symbol: "QQQ",   tv: "NASDAQ:QQQ",     name: "Nasdaq 100 ETF",    type: "ETF",   sector: "Index" },
+  { symbol: "IWM",   tv: "AMEX:IWM",       name: "Russell 2000",      type: "ETF",   sector: "Index" },
+  { symbol: "JEPI",  tv: "AMEX:JEPI",      name: "JPMorgan Income",   type: "ETF",   sector: "Income" },
+  { symbol: "JEPQ",  tv: "NASDAQ:JEPQ",    name: "JPMorgan Nasdaq",   type: "ETF",   sector: "Income" },
+  { symbol: "SCHD",  tv: "AMEX:SCHD",      name: "Schwab Dividend",   type: "ETF",   sector: "Dividend" },
+  { symbol: "SGOV",  tv: "AMEX:SGOV",      name: "T-Bills ETF",       type: "ETF",   sector: "Cash" },
+  { symbol: "MSFT",  tv: "NASDAQ:MSFT",    name: "Microsoft",         type: "STOCK", sector: "Tech" },
+  { symbol: "AAPL",  tv: "NASDAQ:AAPL",    name: "Apple",             type: "STOCK", sector: "Tech" },
+  { symbol: "NVDA",  tv: "NASDAQ:NVDA",    name: "Nvidia",            type: "STOCK", sector: "AI" },
+  { symbol: "GOOGL", tv: "NASDAQ:GOOGL",   name: "Alphabet",          type: "STOCK", sector: "Tech" },
+  { symbol: "AMZN",  tv: "NASDAQ:AMZN",    name: "Amazon",            type: "STOCK", sector: "Tech" },
+  { symbol: "META",  tv: "NASDAQ:META",    name: "Meta Platforms",    type: "STOCK", sector: "Tech" },
+  { symbol: "TSLA",  tv: "NASDAQ:TSLA",    name: "Tesla",             type: "STOCK", sector: "EV" },
+  { symbol: "HOOD",  tv: "NASDAQ:HOOD",    name: "Robinhood",         type: "STOCK", sector: "Fintech" },
+  { symbol: "AMD",   tv: "NASDAQ:AMD",     name: "AMD",               type: "STOCK", sector: "AI" },
+  { symbol: "INTC",  tv: "NASDAQ:INTC",    name: "Intel",             type: "STOCK", sector: "Tech" },
+  { symbol: "PLTR",  tv: "NYSE:PLTR",      name: "Palantir",          type: "STOCK", sector: "AI" },
+  { symbol: "COIN",  tv: "NASDAQ:COIN",    name: "Coinbase",          type: "STOCK", sector: "Crypto" },
+  { symbol: "SOFI",  tv: "NASDAQ:SOFI",    name: "SoFi Technologies", type: "STOCK", sector: "Fintech" },
+  { symbol: "NFLX",  tv: "NASDAQ:NFLX",   name: "Netflix",           type: "STOCK", sector: "Media" },
+  { symbol: "DIS",   tv: "NYSE:DIS",       name: "Disney",            type: "STOCK", sector: "Media" },
+  { symbol: "JPM",   tv: "NYSE:JPM",       name: "JPMorgan Chase",    type: "STOCK", sector: "Finance" },
+  { symbol: "BAC",   tv: "NYSE:BAC",       name: "Bank of America",   type: "STOCK", sector: "Finance" },
+  { symbol: "BRK.B", tv: "NYSE:BRK.B",    name: "Berkshire Hathaway",type: "STOCK", sector: "Finance" },
+  { symbol: "V",     tv: "NYSE:V",         name: "Visa",              type: "STOCK", sector: "Finance" },
+  { symbol: "UNH",   tv: "NYSE:UNH",       name: "UnitedHealth",      type: "STOCK", sector: "Health" },
+  { symbol: "JNJ",   tv: "NYSE:JNJ",       name: "Johnson & Johnson",  type: "STOCK", sector: "Health" },
+  { symbol: "XOM",   tv: "NYSE:XOM",       name: "ExxonMobil",        type: "STOCK", sector: "Energy" },
 ];
 
-const API    = import.meta.env.VITE_API_URL || "http://localhost:8000";
-const WS_URL = (import.meta.env.VITE_WS_URL || "ws://localhost:8000")
-  .replace("https://", "wss://").replace("http://", "ws://");
+// ── Yahoo Finance price fetcher (free, no API key) ────────────────────────────
+const YF_PROXY = "https://corsproxy.io/?";
+
+async function fetchYahooPrice(symbol) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2d&includePrePost=true`;
+  try {
+    const res = await fetch(`${YF_PROXY}${encodeURIComponent(url)}`);
+    const json = await res.json();
+    const result = json?.chart?.result?.[0];
+    if (!result) return null;
+
+    const meta   = result.meta;
+    const price  = meta.regularMarketPrice;
+    const prev   = meta.chartPreviousClose || meta.previousClose;
+    const change = prev ? ((price - prev) / prev) * 100 : 0;
+    const changeAmt = prev ? price - prev : 0;
+
+    // Pre/post market data
+    const preMarket  = meta.preMarketPrice;
+    const postMarket = meta.postMarketPrice;
+    const extPrice   = postMarket || preMarket;
+    const extChange  = extPrice ? ((extPrice - price) / price) * 100 : null;
+
+    return {
+      symbol,
+      price:       round(price),
+      open:        round(meta.regularMarketOpen || price),
+      high:        round(meta.regularMarketDayHigh || price),
+      low:         round(meta.regularMarketDayLow || price),
+      volume:      meta.regularMarketVolume || 0,
+      prev_close:  round(prev || price),
+      change_pct:  round(change),
+      change_amt:  round(changeAmt),
+      mkt_cap:     meta.marketCap,
+      currency:    meta.currency || "USD",
+      // Extended hours
+      pre_market:  preMarket  ? round(preMarket)  : null,
+      post_market: postMarket ? round(postMarket) : null,
+      ext_price:   extPrice   ? round(extPrice)   : null,
+      ext_change:  extChange  ? round(extChange)  : null,
+      market_state: meta.marketState, // PRE, REGULAR, POST, CLOSED
+      timestamp:   new Date().toISOString(),
+    };
+  } catch (e) {
+    console.error(`Yahoo fetch failed for ${symbol}:`, e.message);
+    return null;
+  }
+}
+
+function round(n, d = 2) {
+  return n ? Math.round(n * Math.pow(10, d)) / Math.pow(10, d) : 0;
+}
 
 // ── TradingView iframe URLs ───────────────────────────────────────────────────
 const tvChart = (sym, interval = "D", style = "1") =>
   `https://www.tradingview.com/widgetembed/?symbol=${encodeURIComponent(sym)}&interval=${interval}&symboledit=1&saveimage=1&toolbarbg=0d1117&studies=RSI%40tv-basicstudies%1FMACD%40tv-basicstudies%1FVolume%40tv-basicstudies&theme=dark&style=${style}&timezone=America%2FNew_York&withdateranges=1&showpopupbutton=1&hideideas=1&locale=en`;
 
 const tvTechnical = (sym) =>
-  `https://www.tradingview.com/embed-widget/technical-analysis/?symbol=${encodeURIComponent(sym)}&interval=1D&colorTheme=dark&isTransparent=true&locale=en`;
+  `https://www.tradingview.com/embed-widget/technical-analysis/?symbol=${encodeURIComponent(sym)}&interval=1D&colorTheme=dark&isTransparent=true&locale=en&showIntervalTabs=true`;
 
 const tvNews = (sym) =>
   `https://www.tradingview.com/embed-widget/timeline/?feedMode=symbol&symbol=${encodeURIComponent(sym)}&colorTheme=dark&isTransparent=true&locale=en`;
@@ -45,45 +103,42 @@ const tvSymbolInfo = (sym) =>
 const tvFinancials = (sym) =>
   `https://www.tradingview.com/embed-widget/financials/?symbol=${encodeURIComponent(sym)}&colorTheme=dark&isTransparent=true&displayMode=regular&locale=en`;
 
-// ── Live price hook ───────────────────────────────────────────────────────────
-function useMarketData() {
-  const [prices, setPrices] = useState({});
-  const [status, setStatus] = useState("connecting");
-  const [lastUpdate, setLU] = useState(null);
-  const wsRef  = useRef(null);
-  const retryT = useRef(null);
+// ── Yahoo Finance price hook ──────────────────────────────────────────────────
+function useYahooPrices(watchlist) {
+  const [prices, setPrices]   = useState({});
+  const [loading, setLoading] = useState(true);
+  const [lastUpdate, setLU]   = useState(null);
+  const [status, setStatus]   = useState("loading");
 
-  const merge = useCallback((data) => {
-    setPrices(p => ({ ...p, ...data }));
-    setLU(new Date());
-  }, []);
-
-  const poll = useCallback(async () => {
+  const fetchAll = useCallback(async () => {
     try {
-      const r = await fetch(`${API}/api/prices/`);
-      if (r.ok) { merge(await r.json()); setStatus("live"); }
-    } catch {}
-  }, [merge]);
-
-  const connect = useCallback(() => {
-    try {
-      const ws = new WebSocket(`${WS_URL}/ws/prices`);
-      wsRef.current = ws;
-      ws.onopen    = () => { setStatus("live"); clearTimeout(retryT.current); };
-      ws.onmessage = (e) => { try { const m = JSON.parse(e.data); if (m.data) merge(m.data); } catch {} };
-      ws.onclose   = () => { setStatus("reconnecting"); retryT.current = setTimeout(connect, 4000); };
-      ws.onerror   = () => { setStatus("polling"); ws.close(); };
-    } catch { setStatus("polling"); }
-  }, [merge]);
+      // Fetch all tickers in parallel
+      const results = await Promise.allSettled(
+        watchlist.map(sym => fetchYahooPrice(sym))
+      );
+      const updated = {};
+      results.forEach((r, i) => {
+        if (r.status === "fulfilled" && r.value) {
+          updated[watchlist[i]] = r.value;
+        }
+      });
+      setPrices(prev => ({ ...prev, ...updated }));
+      setLastUpdate(new Date());
+      setStatus("live");
+      setLoading(false);
+    } catch (e) {
+      setStatus("error");
+    }
+  }, [watchlist.join(",")]);
 
   useEffect(() => {
-    poll();
-    connect();
-    const iv = setInterval(poll, 15000);
-    return () => { clearInterval(iv); clearTimeout(retryT.current); wsRef.current?.close(); };
-  }, [connect, poll]);
+    fetchAll();
+    // Refresh every 60 seconds (Yahoo Finance rate limit friendly)
+    const iv = setInterval(fetchAll, 60000);
+    return () => clearInterval(iv);
+  }, [fetchAll]);
 
-  return { prices, status, lastUpdate };
+  return { prices, loading, lastUpdate, status, refresh: fetchAll };
 }
 
 // ── Flash hook ────────────────────────────────────────────────────────────────
@@ -101,18 +156,36 @@ function useFlash(val) {
   return flash;
 }
 
+// ── Market state badge ────────────────────────────────────────────────────────
+function MarketBadge({ state }) {
+  const cfg = {
+    PRE:     { label: "Pre-Market",  color: "#e3b341", bg: "#e3b34120" },
+    REGULAR: { label: "Market Open", color: "#3fb950", bg: "#3fb95020" },
+    POST:    { label: "After Hours", color: "#58a6ff", bg: "#58a6ff20" },
+    CLOSED:  { label: "Closed",      color: "#6e7681", bg: "#6e768120" },
+  }[state] || { label: state, color: "#6e7681", bg: "#6e768120" };
+
+  return (
+    <span style={{
+      fontSize: 9, padding: "2px 7px", borderRadius: 4,
+      background: cfg.bg, color: cfg.color,
+      fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, letterSpacing: 0.5,
+    }}>{cfg.label}</span>
+  );
+}
+
 // ── Ticker row ────────────────────────────────────────────────────────────────
 function TickerRow({ ticker, price, selected, onClick, onRemove }) {
-  const flash = useFlash(price?.price);
-  const chg   = price?.change_pct ?? 0;
-  const up    = chg >= 0;
-  const [hovered, setHovered] = useState(false);
+  const flash   = useFlash(price?.price);
+  const chg     = price?.change_pct ?? 0;
+  const up      = chg >= 0;
+  const [hov, setHov] = useState(false);
 
   return (
     <div
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
       style={{
         padding: "9px 12px", cursor: "pointer",
         borderBottom: "1px solid #161b22",
@@ -120,13 +193,11 @@ function TickerRow({ ticker, price, selected, onClick, onRemove }) {
         background: selected ? "#161b22"
           : flash === "up" ? "#0d2a1a"
           : flash === "dn" ? "#2a0d0d"
-          : hovered ? "#0d1117"
-          : "transparent",
+          : hov ? "#0d1117" : "transparent",
         transition: "background 0.4s",
-        position: "relative",
       }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
             <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, fontWeight: 700, color: "#e6edf3" }}>
               {ticker.symbol}
@@ -135,16 +206,15 @@ function TickerRow({ ticker, price, selected, onClick, onRemove }) {
               fontSize: 8, padding: "1px 4px", borderRadius: 3,
               background: ticker.type === "ETF" ? "#1f6feb20" : "#3fb95020",
               color: ticker.type === "ETF" ? "#58a6ff" : "#3fb950",
-              fontFamily: "'IBM Plex Mono',monospace",
             }}>{ticker.type}</span>
           </div>
-          <div style={{ fontSize: 9, color: "#6e7681", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 100 }}>
+          <div style={{ fontSize: 9, color: "#6e7681", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 100 }}>
             {ticker.name}
           </div>
         </div>
 
-        <div style={{ textAlign: "right", display: "flex", alignItems: "center", gap: 6 }}>
-          <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ textAlign: "right" }}>
             {price ? (
               <>
                 <div style={{
@@ -152,29 +222,21 @@ function TickerRow({ ticker, price, selected, onClick, onRemove }) {
                   color: flash === "up" ? "#3fb950" : flash === "dn" ? "#f85149" : "#e6edf3",
                   transition: "color 0.4s",
                 }}>${price.price?.toFixed(2)}</div>
-                <div style={{
-                  fontFamily: "'IBM Plex Mono',monospace", fontSize: 9,
-                  color: up ? "#3fb950" : "#f85149",
-                }}>{up ? "▲" : "▼"}{Math.abs(chg).toFixed(2)}%</div>
+                <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, color: up ? "#3fb950" : "#f85149" }}>
+                  {up ? "▲" : "▼"}{Math.abs(chg).toFixed(2)}%
+                </div>
               </>
             ) : (
-              <div style={{ width: 52, height: 26, background: "#1a1f2e", borderRadius: 4, animation: "shimmer 1.5s infinite" }} />
+              <div style={{ width: 52, height: 28, background: "#1a1f2e", borderRadius: 4, animation: "shimmer 1.5s infinite" }} />
             )}
           </div>
-
-          {/* Remove button */}
-          {hovered && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onRemove(ticker.symbol); }}
-              style={{
-                width: 18, height: 18, borderRadius: "50%",
-                background: "#f85149", border: "none",
-                color: "#fff", fontSize: 10, fontWeight: 700,
-                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                flexShrink: 0,
-              }}
-              title="Remove from watchlist"
-            >×</button>
+          {hov && (
+            <button onClick={(e) => { e.stopPropagation(); onRemove(ticker.symbol); }} style={{
+              width: 18, height: 18, borderRadius: "50%",
+              background: "#f85149", border: "none",
+              color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            }}>×</button>
           )}
         </div>
       </div>
@@ -189,99 +251,105 @@ function AddStockModal({ watchlist, onAdd, onClose }) {
 
   const available = ALL_TICKERS.filter(t =>
     !watchlist.includes(t.symbol) &&
-    (t.symbol.includes(search.toUpperCase()) || t.name.toLowerCase().includes(search.toLowerCase()))
+    (t.symbol.includes(search.toUpperCase()) ||
+     t.name.toLowerCase().includes(search.toLowerCase()) ||
+     t.sector.toLowerCase().includes(search.toLowerCase()))
   );
 
   return (
     <div style={{
-      position: "fixed", inset: 0, background: "#00000088", zIndex: 1000,
-      display: "flex", alignItems: "center", justifyContent: "center",
+      position: "fixed", inset: 0, background: "#00000099",
+      zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center",
     }} onClick={onClose}>
       <div style={{
         background: "#161b22", border: "1px solid #30363d",
-        borderRadius: 14, padding: 24, width: 420, maxHeight: "80vh",
-        display: "flex", flexDirection: "column", gap: 16,
+        borderRadius: 14, padding: 24, width: 440,
+        maxHeight: "80vh", display: "flex", flexDirection: "column", gap: 14,
       }} onClick={e => e.stopPropagation()}>
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 14, fontWeight: 700, color: "#e6edf3" }}>
             Add to Watchlist
           </span>
           <button onClick={onClose} style={{
-            background: "#21262d", border: "none", borderRadius: "50%",
-            width: 28, height: 28, color: "#8b949e", fontSize: 16, cursor: "pointer",
+            width: 28, height: 28, borderRadius: "50%",
+            background: "#21262d", color: "#8b949e", fontSize: 16, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
           }}>×</button>
         </div>
 
-        {/* Search */}
         <input
-          autoFocus
-          value={search}
+          autoFocus value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Search symbol or name..."
+          placeholder="Search symbol, name, or sector..."
           style={{
             background: "#0d1117", border: "1px solid #30363d",
             borderRadius: 8, padding: "8px 12px", color: "#e6edf3",
-            fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, outline: "none",
-            width: "100%",
+            fontFamily: "'IBM Plex Mono',monospace", fontSize: 12,
+            outline: "none", width: "100%",
           }}
         />
 
-        {/* Available list */}
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
-          {available.length === 0 && search && (
-            <div style={{ color: "#6e7681", fontSize: 12, padding: 8, fontFamily: "'IBM Plex Mono',monospace" }}>
-              No matches. Add custom symbol below.
-            </div>
-          )}
-          {available.map(t => (
-            <div key={t.symbol} onClick={() => { onAdd(t.symbol); }}
-              style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                padding: "8px 12px", borderRadius: 8, cursor: "pointer",
-                background: "#0d1117", border: "1px solid #21262d",
-                transition: "border-color 0.15s",
-              }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = "#58a6ff"}
-              onMouseLeave={e => e.currentTarget.style.borderColor = "#21262d"}
-            >
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, fontWeight: 700, color: "#e6edf3" }}>{t.symbol}</span>
-                  <span style={{
-                    fontSize: 8, padding: "1px 4px", borderRadius: 3,
-                    background: t.type === "ETF" ? "#1f6feb20" : "#3fb95020",
-                    color: t.type === "ETF" ? "#58a6ff" : "#3fb950",
-                  }}>{t.type}</span>
-                </div>
-                <div style={{ fontSize: 10, color: "#6e7681" }}>{t.name} · {t.sector}</div>
+        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+          {/* Sector groups */}
+          {[...new Set(available.map(t => t.sector))].map(sector => (
+            <div key={sector}>
+              <div style={{ fontSize: 9, color: "#6e7681", fontFamily: "'IBM Plex Mono',monospace", letterSpacing: 1, marginBottom: 4, marginTop: 8 }}>
+                {sector.toUpperCase()}
               </div>
-              <span style={{ fontSize: 18, color: "#58a6ff" }}>+</span>
+              {available.filter(t => t.sector === sector).map(t => (
+                <div key={t.symbol} onClick={() => onAdd(t.symbol)} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "7px 10px", borderRadius: 7, cursor: "pointer",
+                  background: "#0d1117", border: "1px solid #21262d",
+                  marginBottom: 3, transition: "border-color 0.15s",
+                }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = "#58a6ff"}
+                onMouseLeave={e => e.currentTarget.style.borderColor = "#21262d"}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, fontWeight: 700, color: "#e6edf3" }}>{t.symbol}</span>
+                      <span style={{
+                        fontSize: 8, padding: "1px 4px", borderRadius: 3,
+                        background: t.type === "ETF" ? "#1f6feb20" : "#3fb95020",
+                        color: t.type === "ETF" ? "#58a6ff" : "#3fb950",
+                      }}>{t.type}</span>
+                    </div>
+                    <div style={{ fontSize: 10, color: "#6e7681" }}>{t.name}</div>
+                  </div>
+                  <span style={{ fontSize: 18, color: "#58a6ff" }}>+</span>
+                </div>
+              ))}
             </div>
           ))}
+          {available.length === 0 && search && (
+            <div style={{ color: "#6e7681", fontSize: 12, padding: 8, fontFamily: "'IBM Plex Mono',monospace" }}>
+              No matches. Try adding a custom symbol below.
+            </div>
+          )}
         </div>
 
-        {/* Custom symbol input */}
         <div style={{ borderTop: "1px solid #21262d", paddingTop: 12 }}>
-          <div style={{ fontSize: 10, color: "#6e7681", marginBottom: 8, fontFamily: "'IBM Plex Mono',monospace" }}>
-            ADD CUSTOM SYMBOL
+          <div style={{ fontSize: 9, color: "#6e7681", fontFamily: "'IBM Plex Mono',monospace", letterSpacing: 1, marginBottom: 6 }}>
+            CUSTOM SYMBOL
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <input
-              value={custom}
-              onChange={e => setCustom(e.target.value.toUpperCase())}
+            <input value={custom} onChange={e => setCustom(e.target.value.toUpperCase())}
               onKeyDown={e => e.key === "Enter" && custom && onAdd(custom)}
-              placeholder="e.g. TSLA, COIN..."
+              placeholder="e.g. TSLA, BTC-USD, EURUSD=X"
               style={{
                 flex: 1, background: "#0d1117", border: "1px solid #30363d",
                 borderRadius: 8, padding: "7px 10px", color: "#e6edf3",
                 fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, outline: "none",
-              }}
-            />
+              }} />
             <button onClick={() => custom && onAdd(custom)} style={{
               padding: "7px 16px", borderRadius: 8, background: "#1f6feb",
               border: "none", color: "#fff", fontFamily: "'IBM Plex Mono',monospace",
               fontSize: 12, fontWeight: 700, cursor: "pointer",
             }}>Add</button>
+          </div>
+          <div style={{ fontSize: 9, color: "#3a4258", marginTop: 6, fontFamily: "'IBM Plex Mono',monospace" }}>
+            Yahoo Finance symbols: BTC-USD, ETH-USD, GC=F (Gold), CL=F (Oil), EURUSD=X
           </div>
         </div>
       </div>
@@ -291,15 +359,14 @@ function AddStockModal({ watchlist, onAdd, onClose }) {
 
 // ── Main dashboard ────────────────────────────────────────────────────────────
 export default function LiveDashboard({ watchlist, setWatchlist, onNavigate, tabs, activeTab }) {
-  const { prices, status, lastUpdate } = useMarketData();
-  const [selected, setSelected]   = useState(watchlist[0] || "NVDA");
+  const { prices, loading, lastUpdate, status, refresh } = useYahooPrices(watchlist);
+  const [selected, setSelected]     = useState(watchlist[6] || watchlist[0] || "MSFT");
   const [activeTab2, setActiveTab2] = useState("chart");
-  const [interval, setIntervalV]  = useState("D");
+  const [interval, setIntervalV]    = useState("D");
   const [chartStyle, setChartStyle] = useState("1");
-  const [filter, setFilter]       = useState("ALL");
+  const [filter, setFilter]         = useState("ALL");
   const [showAddModal, setShowAddModal] = useState(false);
 
-  // Build ticker objects for watchlist
   const watchlistTickers = watchlist.map(sym => {
     const found = ALL_TICKERS.find(t => t.symbol === sym);
     return found || { symbol: sym, tv: `NASDAQ:${sym}`, name: sym, type: "STOCK", sector: "Custom" };
@@ -313,6 +380,15 @@ export default function LiveDashboard({ watchlist, setWatchlist, onNavigate, tab
   const adv      = watchlistTickers.filter(t => (prices[t.symbol]?.change_pct ?? 0) > 0).length;
   const dec      = watchlistTickers.filter(t => (prices[t.symbol]?.change_pct ?? 0) < 0).length;
 
+  // Format market cap
+  const fmtCap = (n) => {
+    if (!n) return "—";
+    if (n >= 1e12) return `$${(n/1e12).toFixed(2)}T`;
+    if (n >= 1e9)  return `$${(n/1e9).toFixed(1)}B`;
+    if (n >= 1e6)  return `$${(n/1e6).toFixed(1)}M`;
+    return `$${n}`;
+  };
+
   const addStock = (symbol) => {
     if (!watchlist.includes(symbol)) {
       setWatchlist(prev => [...prev, symbol]);
@@ -322,8 +398,9 @@ export default function LiveDashboard({ watchlist, setWatchlist, onNavigate, tab
   };
 
   const removeStock = (symbol) => {
-    setWatchlist(prev => prev.filter(s => s !== symbol));
-    if (selected === symbol) setSelected(watchlist.filter(s => s !== symbol)[0] || "MSFT");
+    const next = watchlist.filter(s => s !== symbol);
+    setWatchlist(next);
+    if (selected === symbol) setSelected(next[0] || "MSFT");
   };
 
   return (
@@ -339,56 +416,66 @@ export default function LiveDashboard({ watchlist, setWatchlist, onNavigate, tab
         iframe { display:block; border:none; }
       `}</style>
 
-      {/* ── Top nav bar ── */}
+      {/* ── Top nav ── */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 16px", height: 44, flexShrink: 0,
         background: "#010409", borderBottom: "1px solid #21262d",
       }}>
-        {/* Logo + status */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 14, fontWeight: 700, color: "#e6edf3" }}>
             SIGNAL <span style={{ color: "#58a6ff" }}>//</span> BOARD
           </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          {/* Data source badge */}
+          <span style={{
+            fontSize: 9, padding: "2px 7px", borderRadius: 4,
+            background: "#3fb95015", color: "#3fb950",
+            fontFamily: "'IBM Plex Mono',monospace", letterSpacing: 0.5,
+          }}>YF + TradingView</span>
+          {/* Live dot */}
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <div style={{
-              width: 7, height: 7, borderRadius: "50%",
+              width: 6, height: 6, borderRadius: "50%",
               background: status === "live" ? "#3fb950" : "#e3b341",
-              boxShadow: status === "live" ? "0 0 8px #3fb950" : "none",
+              boxShadow: status === "live" ? "0 0 6px #3fb950" : "none",
               animation: status === "live" ? "blink 3s infinite" : "none",
             }} />
-            <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, color: "#6e7681", letterSpacing: 1 }}>
-              {status.toUpperCase()}
+            <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, color: "#6e7681" }}>
+              {loading ? "LOADING..." : status.toUpperCase()}
             </span>
           </div>
         </div>
 
-        {/* Centre nav tabs */}
-        <div style={{ display: "flex", gap: 4 }}>
+        {/* Tab nav */}
+        <div style={{ display: "flex", gap: 3 }}>
           {tabs?.map(t => (
             <button key={t.id} onClick={() => onNavigate(t.id)} style={{
               display: "flex", alignItems: "center", gap: 5,
               padding: "5px 12px", borderRadius: 7,
               background: t.id === activeTab ? "#1f6feb" : "#161b22",
               color: t.id === activeTab ? "#fff" : "#8b949e",
-              fontFamily: "'IBM Plex Mono',monospace",
-              fontSize: 11, fontWeight: t.id === activeTab ? 700 : 400,
+              fontFamily: "'IBM Plex Mono',monospace", fontSize: 11,
+              fontWeight: t.id === activeTab ? 700 : 400,
               border: t.id === activeTab ? "1px solid #1f6feb" : "1px solid #21262d",
-              transition: "all 0.15s",
             }}>
               {t.icon} {t.label}
             </button>
           ))}
         </div>
 
-        {/* Right: market stats */}
-        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+        {/* Right stats */}
+        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
           {[["ADV", adv, "#3fb950"], ["DEC", dec, "#f85149"]].map(([l, v, c]) => (
-            <div key={l} style={{ display: "flex", gap: 5, alignItems: "center" }}>
+            <div key={l} style={{ display: "flex", gap: 4, alignItems: "center" }}>
               <span style={{ fontSize: 9, color: "#6e7681", fontFamily: "'IBM Plex Mono',monospace" }}>{l}</span>
               <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, fontWeight: 700, color: c }}>{v}</span>
             </div>
           ))}
+          <button onClick={refresh} style={{
+            fontSize: 10, color: "#6e7681", fontFamily: "'IBM Plex Mono',monospace",
+            background: "#161b22", border: "1px solid #21262d",
+            padding: "3px 8px", borderRadius: 5, cursor: "pointer",
+          }}>↻</button>
           {lastUpdate && (
             <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, color: "#3a4258" }}>
               {lastUpdate.toLocaleTimeString()}
@@ -402,8 +489,7 @@ export default function LiveDashboard({ watchlist, setWatchlist, onNavigate, tab
 
         {/* Left: watchlist */}
         <div style={{ width: 196, borderRight: "1px solid #21262d", display: "flex", flexDirection: "column", flexShrink: 0 }}>
-          {/* Filter + Add button */}
-          <div style={{ padding: "7px 10px", borderBottom: "1px solid #21262d", display: "flex", gap: 3, alignItems: "center" }}>
+          <div style={{ padding: "6px 8px", borderBottom: "1px solid #21262d", display: "flex", gap: 3, alignItems: "center" }}>
             {["ALL","STOCK","ETF"].map(f => (
               <button key={f} onClick={() => setFilter(f)} style={{
                 flex: 1, padding: "3px 0", borderRadius: 5,
@@ -415,17 +501,14 @@ export default function LiveDashboard({ watchlist, setWatchlist, onNavigate, tab
             <button onClick={() => setShowAddModal(true)} style={{
               width: 26, height: 26, borderRadius: 6,
               background: "#1f6feb20", border: "1px solid #1f6feb50",
-              color: "#58a6ff", fontSize: 16, fontWeight: 700,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", flexShrink: 0,
+              color: "#58a6ff", fontSize: 18, fontWeight: 700, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
             }} title="Add stock">+</button>
           </div>
 
-          {/* Ticker rows */}
           <div style={{ flex: 1, overflowY: "auto" }}>
             {filtered.map(t => (
-              <TickerRow
-                key={t.symbol} ticker={t} price={prices[t.symbol]}
+              <TickerRow key={t.symbol} ticker={t} price={prices[t.symbol]}
                 selected={selected === t.symbol}
                 onClick={() => { setSelected(t.symbol); setActiveTab2("chart"); }}
                 onRemove={removeStock}
@@ -433,30 +516,29 @@ export default function LiveDashboard({ watchlist, setWatchlist, onNavigate, tab
             ))}
           </div>
 
-          {/* Watchlist count */}
           <div style={{
-            padding: "6px 12px", borderTop: "1px solid #21262d",
-            fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, color: "#3a4258",
-            display: "flex", justifyContent: "space-between",
+            padding: "5px 10px", borderTop: "1px solid #21262d",
+            display: "flex", justifyContent: "space-between", alignItems: "center",
           }}>
-            <span>{watchlist.length} tracked</span>
+            <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, color: "#3a4258" }}>
+              {watchlist.length} tracked · Yahoo Finance
+            </span>
             <button onClick={() => setShowAddModal(true)} style={{
-              fontSize: 9, color: "#58a6ff", background: "none", border: "none", cursor: "pointer",
-              fontFamily: "'IBM Plex Mono',monospace",
+              fontSize: 9, color: "#58a6ff", fontFamily: "'IBM Plex Mono',monospace",
             }}>+ add</button>
           </div>
         </div>
 
-        {/* Right: chart area */}
+        {/* Right: detail */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
           {/* Symbol header */}
           <div style={{
             padding: "8px 16px", borderBottom: "1px solid #21262d",
             display: "flex", alignItems: "center", justifyContent: "space-between",
-            flexShrink: 0, background: "#0d1117",
+            flexShrink: 0, background: "#0d1117", gap: 12,
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 20, fontWeight: 700, color: "#e6edf3" }}>
                 {ticker?.symbol}
               </span>
@@ -467,13 +549,28 @@ export default function LiveDashboard({ watchlist, setWatchlist, onNavigate, tab
                 fontFamily: "'IBM Plex Mono',monospace",
               }}>{ticker?.sector}</span>
 
+              {price?.market_state && <MarketBadge state={price.market_state} />}
+
               {price && (
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginLeft: 8 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                   <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 26, fontWeight: 700, color: "#e6edf3" }}>
                     ${price.price?.toFixed(2)}
                   </span>
                   <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, color: up ? "#3fb950" : "#f85149" }}>
-                    {up ? "+" : ""}{(price.price - price.prev_close)?.toFixed(2)} ({up ? "+" : ""}{chg?.toFixed(2)}%)
+                    {up ? "+" : ""}{price.change_amt?.toFixed(2)} ({up ? "+" : ""}{chg?.toFixed(2)}%)
+                  </span>
+                </div>
+              )}
+
+              {/* Extended hours */}
+              {price?.ext_price && price.market_state !== "REGULAR" && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 10, color: "#6e7681" }}>Ext:</span>
+                  <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, fontWeight: 600, color: "#58a6ff" }}>
+                    ${price.ext_price?.toFixed(2)}
+                  </span>
+                  <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, color: price.ext_change >= 0 ? "#3fb950" : "#f85149" }}>
+                    {price.ext_change >= 0 ? "+" : ""}{price.ext_change?.toFixed(2)}%
                   </span>
                 </div>
               )}
@@ -481,11 +578,11 @@ export default function LiveDashboard({ watchlist, setWatchlist, onNavigate, tab
 
             {/* Chart controls */}
             {activeTab2 === "chart" && (
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
                 <div style={{ display: "flex", gap: 2, background: "#161b22", borderRadius: 7, padding: 3 }}>
                   {[["1","1m"],["5","5m"],["15","15m"],["60","1H"],["D","1D"],["W","1W"],["M","1M"]].map(([val, label]) => (
                     <button key={val} onClick={() => setIntervalV(val)} style={{
-                      padding: "3px 8px", borderRadius: 5,
+                      padding: "3px 7px", borderRadius: 5,
                       background: interval === val ? "#21262d" : "transparent",
                       color: interval === val ? "#e6edf3" : "#6e7681",
                       fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 600,
@@ -495,7 +592,7 @@ export default function LiveDashboard({ watchlist, setWatchlist, onNavigate, tab
                 <div style={{ display: "flex", gap: 2, background: "#161b22", borderRadius: 7, padding: 3 }}>
                   {[["1","🕯️"],["3","📈"],["8","📊"]].map(([val, icon]) => (
                     <button key={val} onClick={() => setChartStyle(val)} style={{
-                      padding: "3px 8px", borderRadius: 5, fontSize: 12,
+                      padding: "3px 7px", borderRadius: 5, fontSize: 12,
                       background: chartStyle === val ? "#21262d" : "transparent",
                     }}>{icon}</button>
                   ))}
@@ -504,7 +601,7 @@ export default function LiveDashboard({ watchlist, setWatchlist, onNavigate, tab
             )}
           </div>
 
-          {/* Inner tab bar */}
+          {/* Inner tabs + quick stats */}
           <div style={{
             display: "flex", borderBottom: "1px solid #21262d",
             background: "#0d1117", flexShrink: 0, alignItems: "center",
@@ -516,24 +613,30 @@ export default function LiveDashboard({ watchlist, setWatchlist, onNavigate, tab
               { id: "info",      icon: "ℹ️",  label: "Financials" },
             ].map(tab => (
               <button key={tab.id} onClick={() => setActiveTab2(tab.id)} style={{
-                padding: "8px 16px", fontSize: 12,
+                padding: "8px 14px", fontSize: 12,
                 fontFamily: "'IBM Plex Sans',sans-serif",
                 color: activeTab2 === tab.id ? "#58a6ff" : "#6e7681",
                 borderBottom: activeTab2 === tab.id ? "2px solid #58a6ff" : "2px solid transparent",
                 fontWeight: activeTab2 === tab.id ? 600 : 400,
-                display: "flex", alignItems: "center", gap: 5,
+                display: "flex", alignItems: "center", gap: 4,
               }}>
                 <span>{tab.icon}</span><span>{tab.label}</span>
               </button>
             ))}
 
-            {/* Quick stats */}
             {price && (
-              <div style={{ marginLeft: "auto", display: "flex", gap: 14, padding: "0 16px", alignItems: "center" }}>
-                {[["O",`$${price.open?.toFixed(2)}`],["H",`$${price.high?.toFixed(2)}`],["L",`$${price.low?.toFixed(2)}`],["Vol",price.volume?(price.volume/1e6).toFixed(1)+"M":"—"],["Prev",`$${price.prev_close?.toFixed(2)}`]].map(([l,v]) => (
-                  <div key={l} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 12, padding: "0 14px", alignItems: "center", flexWrap: "nowrap" }}>
+                {[
+                  ["O",    `$${price.open?.toFixed(2)}`],
+                  ["H",    `$${price.high?.toFixed(2)}`],
+                  ["L",    `$${price.low?.toFixed(2)}`],
+                  ["Vol",  price.volume ? `${(price.volume/1e6).toFixed(1)}M` : "—"],
+                  ["Prev", `$${price.prev_close?.toFixed(2)}`],
+                  ["Cap",  fmtCap(price.mkt_cap)],
+                ].map(([l, v]) => (
+                  <div key={l} style={{ display: "flex", gap: 3, alignItems: "center" }}>
                     <span style={{ fontSize: 9, color: "#6e7681", fontFamily: "'IBM Plex Mono',monospace" }}>{l}</span>
-                    <span style={{ fontSize: 11, color: "#e6edf3", fontFamily: "'IBM Plex Mono',monospace", fontWeight: 600 }}>{v}</span>
+                    <span style={{ fontSize: 10, color: "#e6edf3", fontFamily: "'IBM Plex Mono',monospace", fontWeight: 600 }}>{v}</span>
                   </div>
                 ))}
               </div>
@@ -542,41 +645,43 @@ export default function LiveDashboard({ watchlist, setWatchlist, onNavigate, tab
 
           {/* Widget area */}
           <div style={{ flex: 1, overflow: "hidden" }}>
-            {/* Chart */}
             <div style={{ display: activeTab2 === "chart" ? "block" : "none", height: "100%" }}>
               <iframe key={`chart-${ticker?.tv}-${interval}-${chartStyle}`}
-                src={tvChart(ticker?.tv || "NASDAQ:NVDA", interval, chartStyle)}
+                src={tvChart(ticker?.tv || "NASDAQ:MSFT", interval, chartStyle)}
                 width="100%" height="100%" />
             </div>
-
-            {/* Technical */}
             <div style={{ display: activeTab2 === "technical" ? "block" : "none", height: "100%" }}>
               <iframe key={`tech-${ticker?.tv}`}
-                src={tvTechnical(ticker?.tv || "NASDAQ:NVDA")}
+                src={tvTechnical(ticker?.tv || "NASDAQ:MSFT")}
                 width="100%" height="100%" />
             </div>
-
-            {/* News */}
             <div style={{ display: activeTab2 === "news" ? "block" : "none", height: "100%" }}>
               <iframe key={`news-${ticker?.tv}`}
-                src={tvNews(ticker?.tv || "NASDAQ:NVDA")}
+                src={tvNews(ticker?.tv || "NASDAQ:MSFT")}
                 width="100%" height="100%" />
             </div>
-
-            {/* Financials */}
             <div style={{ display: activeTab2 === "info" ? "flex" : "none", flexDirection: "column", height: "100%", overflowY: "auto" }}>
-              <iframe key={`sinfo-${ticker?.tv}`} src={tvSymbolInfo(ticker?.tv || "NASDAQ:NVDA")} width="100%" height="160" style={{ flexShrink: 0 }} />
-              <iframe key={`fin-${ticker?.tv}`} src={tvFinancials(ticker?.tv || "NASDAQ:NVDA")} width="100%" height="500" style={{ flexShrink: 0 }} />
+              <iframe key={`sinfo-${ticker?.tv}`} src={tvSymbolInfo(ticker?.tv || "NASDAQ:MSFT")} width="100%" height="160" style={{ flexShrink: 0 }} />
+              <iframe key={`fin-${ticker?.tv}`} src={tvFinancials(ticker?.tv || "NASDAQ:MSFT")} width="100%" height="480" style={{ flexShrink: 0 }} />
               {price && (
                 <div style={{ padding: 16 }}>
                   <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, color: "#6e7681", marginBottom: 10, letterSpacing: 1 }}>
-                    LIVE — ALPACA
+                    LIVE DATA — YAHOO FINANCE
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
-                    {[["Price",`$${price.price?.toFixed(2)}`],["Change",`${chg>=0?"+":""}${chg?.toFixed(2)}%`],["Open",`$${price.open?.toFixed(2)}`],["Prev",`$${price.prev_close?.toFixed(2)}`],["High",`$${price.high?.toFixed(2)}`],["Low",`$${price.low?.toFixed(2)}`],["Volume",price.volume?`${(price.volume/1e6).toFixed(2)}M`:"—"]].map(([l,v]) => (
+                    {[
+                      ["Price",     `$${price.price?.toFixed(2)}`],
+                      ["Change",    `${chg>=0?"+":""}${chg?.toFixed(2)}%`],
+                      ["Open",      `$${price.open?.toFixed(2)}`],
+                      ["Prev Close",`$${price.prev_close?.toFixed(2)}`],
+                      ["High",      `$${price.high?.toFixed(2)}`],
+                      ["Low",       `$${price.low?.toFixed(2)}`],
+                      ["Volume",    price.volume ? `${(price.volume/1e6).toFixed(2)}M` : "—"],
+                      ["Market Cap",fmtCap(price.mkt_cap)],
+                    ].map(([l, v]) => (
                       <div key={l} style={{ background: "#161b22", borderRadius: 8, padding: "8px 10px", border: "1px solid #21262d" }}>
                         <div style={{ fontSize: 8, color: "#6e7681", fontFamily: "'IBM Plex Mono',monospace", marginBottom: 3, letterSpacing: 1 }}>{l.toUpperCase()}</div>
-                        <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, fontWeight: 700, color: "#e6edf3" }}>{v}</div>
+                        <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, fontWeight: 700, color: "#e6edf3" }}>{v}</div>
                       </div>
                     ))}
                   </div>
@@ -587,13 +692,8 @@ export default function LiveDashboard({ watchlist, setWatchlist, onNavigate, tab
         </div>
       </div>
 
-      {/* Add Stock Modal */}
       {showAddModal && (
-        <AddStockModal
-          watchlist={watchlist}
-          onAdd={addStock}
-          onClose={() => setShowAddModal(false)}
-        />
+        <AddStockModal watchlist={watchlist} onAdd={addStock} onClose={() => setShowAddModal(false)} />
       )}
     </div>
   );

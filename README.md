@@ -55,7 +55,6 @@ signalboard-frontend/
     │   └── TickerCard.jsx   ← Reusable price + signal card
     └── pages/
         ├── Watchlist.jsx    ← Live prices for all tickers
-        ├── NewsFeed.jsx     ← Stock news grouped by ticker
         ├── Signals.jsx      ← AI BUY/HOLD/SELL signals
         ├── Trader.jsx       ← $100 paper auto-trader + P&L
         └── Chat.jsx         ← AI chat for any stock question
