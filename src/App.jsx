@@ -1,7 +1,7 @@
 // src/App.jsx — main app with 5 tabs
 import { useState, useEffect } from "react";
 import { connectPriceStream, api } from "./lib/api";
-import Watchlist from "./pages/Watchlist";
+import LiveDashboard from "./pages/Watchlist";
 import NewsFeed from "./pages/NewsFeed";
 import Signals from "./pages/Signals";
 import Trader from "./pages/Trader";
@@ -9,7 +9,7 @@ import Chat from "./pages/Chat";
 import "./styles/globals.css";
 
 const TABS = [
-  { id: "watchlist", label: "Watchlist",   icon: "📊" },
+  { id: "watchlist", label: "Live Dashboard", icon: "📊" },
   { id: "news",      label: "News",        icon: "📰" },
   { id: "signals",   label: "AI Signals",  icon: "⚡" },
   { id: "trader",    label: "Auto-Trader", icon: "🤖" },
@@ -76,7 +76,7 @@ export default function App() {
 
       {/* Page content */}
       <main className="main">
-        {tab === "watchlist" && <Watchlist prices={prices} />}
+        {tab === "watchlist" && <LiveDashboard prices={prices} />}
         {tab === "news"      && <NewsFeed prices={prices} />}
         {tab === "signals"   && <Signals  prices={prices} />}
         {tab === "trader"    && <Trader   prices={prices} />}
