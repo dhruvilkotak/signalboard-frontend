@@ -45,12 +45,25 @@ export default function Signals({ watchlist = [] }) {
   }, [fetchPrices]);
 
   const fetchAll = async () => {
+    if (loading) return;  // prevent double-click
     setLoading(true);
     try {
-      const data = await api.signals.all();
-      setSignals(data);
+      // Force regenerate all signals
+      const res = await fetch(`${API}/api/signals/run-all`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.signals) setSignals(data.signals);
+        else setSignals(data);
+      }
       setLastRun(new Date());
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      // Fallback to GET cached signals
+      try {
+        const data = await api.signals.all();
+        setSignals(data);
+      } catch {}
+    }
     setLoading(false);
   };
 
@@ -85,8 +98,8 @@ export default function Signals({ watchlist = [] }) {
             Last run: {lastRun.toLocaleTimeString()}
           </span>
         )}
-        <button className="btn btn-primary" onClick={fetchAll} disabled={loading}>
-          {loading ? "⟳ Analyzing..." : "⚡ Analyze All"}
+        <button className="btn btn-primary" onClick={fetchAll} disabled={loading} style={{ minWidth: 140 }}>
+          {loading ? `⟳ Analyzing... (${Object.keys(signals).length}/${tickers.length})` : "⚡ Analyze All"}
         </button>
       </div>
 
