@@ -62,7 +62,7 @@ export default function App() {
             marginRight: 12, letterSpacing: -0.5,
             background: "none", border: "none", cursor: "pointer",
           }}>
-            SIGNAL <span style={{ color: "#58a6ff" }}>//</span> BOARD
+            SIGNAL BOARD
           </button>
 
           {/* Nav tabs */}
