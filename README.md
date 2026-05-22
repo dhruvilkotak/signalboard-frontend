@@ -1,6 +1,6 @@
 # signalboard-frontend
 
-React frontend for Signal // Board — AI stock signal dashboard.
+React frontend for Signal Board — AI stock signal dashboard.
 
 **Companion repo:** [signalboard-backend](https://github.com/YOUR_USERNAME/signalboard-backend)
 
