@@ -1,63 +1,70 @@
-// src/lib/api.js — all backend calls in one place
-const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+// src/lib/api.js
+// Single source of truth for all backend API calls.
+// Automatically attaches Firebase ID token to every request.
+
+const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
+
+// Token getter — set by App.jsx after auth state resolves
+let _getToken = () => null;
+export function setTokenGetter(fn) { _getToken = fn; }
+
+async function authHeaders() {
+  const token = await _getToken();
+  return token
+    ? { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
+    : { "Content-Type": "application/json" };
+}
 
 async function get(path) {
-  const res = await fetch(`${BASE}${path}`);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  const res = await fetch(`${API}${path}`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`GET ${path} → ${res.status}`);
   return res.json();
 }
 
 async function post(path, body) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${API}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    headers: await authHeaders(),
+    body: body ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) throw new Error(`POST ${path} → ${res.status}`);
   return res.json();
 }
 
-export const api = {
-  // Prices
-  prices: {
-    all: () => get("/api/prices/"),
-    one: (symbol) => get(`/api/prices/${symbol}`),
-  },
-  // News
-  news: {
-    all: () => get("/api/news/"),
-    forSymbol: (symbol) => get(`/api/news/${symbol}`),
-  },
-  // Signals
-  signals: {
-    all: () => get("/api/signals/"),
-    one: (symbol, force = false) => get(`/api/signals/${symbol}?force=${force}`),
-  },
-  // Trader
-  trader: {
-    account: () => get("/api/trader/account"),
-    positions: () => get("/api/trader/positions"),
-    performance: () => get("/api/trader/performance"),
-    trades: () => get("/api/trader/trades"),
-    execute: (symbol) => post(`/api/trader/execute/${symbol}`),
-    runAll: () => post("/api/trader/run-all"),
-  },
-  // Alerts
-  alerts: {
-    list: () => get("/api/alerts/"),
-    create: (config) => post("/api/alerts/", config),
-  },
-  // Chat
-  chat: {
-    ask: (question, symbol = null) => post("/api/chat/", { question, symbol }),
-  },
-};
-
-// WebSocket price stream
-export function connectPriceStream(onMessage) {
-  const WS = import.meta.env.VITE_WS_URL || "ws://localhost:8000";
-  const ws = new WebSocket(`${WS}/ws/prices`);
-  ws.onmessage = (e) => onMessage(JSON.parse(e.data));
-  ws.onerror = (e) => console.error("WS error", e);
-  return ws;
+async function del(path) {
+  const res = await fetch(`${API}${path}`, {
+    method: "DELETE",
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error(`DELETE ${path} → ${res.status}`);
+  return res.json();
 }
+
+// ── Prices ────────────────────────────────────────────────────────────────────
+export const getPrices   = ()         => get("/api/prices");
+export const getQuote    = (symbol)   => get(`/api/quote/${symbol}`);
+export const getBatch    = (symbols)  => get(`/api/quote/batch/${symbols.join(",")}`);
+
+// ── Signals ───────────────────────────────────────────────────────────────────
+export const getSignals  = ()         => get("/api/signals");
+export const analyzeAll  = ()         => post("/api/signals/analyze-all");
+export const analyzeOne  = (symbol)   => post(`/api/signals/analyze/${symbol}`);
+
+// ── Watchlist (protected — requires auth) ────────────────────────────────────
+export const getWatchlist    = ()       => get("/api/watchlist/");
+export const addToWatchlist  = (symbol) => post(`/api/watchlist/${symbol}`);
+export const removeFromWatchlist = (symbol) => del(`/api/watchlist/${symbol}`);
+
+// ── Trader ────────────────────────────────────────────────────────────────────
+export const getTrader   = ()         => get("/api/trader");
+export const getTrades   = ()         => get("/api/trader/trades");
+
+// ── News ──────────────────────────────────────────────────────────────────────
+export const getNews     = (symbol)   => get(`/api/news/${symbol}`);
+
+// ── Alerts ────────────────────────────────────────────────────────────────────
+export const getAlerts   = ()         => get("/api/alerts");
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+export const sendChat = (message, watchlist = []) =>
+  post("/api/chat", { message, watchlist });

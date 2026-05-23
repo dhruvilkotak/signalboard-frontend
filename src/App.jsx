@@ -1,144 +1,122 @@
 // src/App.jsx
-import { useState, useEffect } from "react";
+// Root component — handles auth gate, tab navigation, shared state
+
+import { useState, useEffect, createContext, useContext } from "react";
+import { useAuth } from "./hooks/useAuth";
+import { setTokenGetter } from "./lib/api";
+import { usePrices } from "./hooks/usePrices";
+
+import Login       from "./pages/Login";
+import Watchlist   from "./pages/Watchlist";
+import Signals     from "./pages/Signals";
+import Trader      from "./pages/Trader";
+import Chat        from "./pages/Chat";
 import LiveDashboard from "./pages/LiveDashboard";
-import Signals from "./pages/Signals";
-import Trader from "./pages/Trader";
-import Chat from "./pages/Chat";
-import "./styles/globals.css";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
-const DEFAULT_WATCHLIST = [
-  "SPY","VOO","JEPI","JEPQ","SCHD","SGOV",
-  "MSFT","AAPL","NVDA","GOOGL","AMZN","META","HOOD"
-];
+// ── Auth context — gives any child access to user/token/logout ────────────────
+export const AuthContext = createContext(null);
+export const useAuthContext = () => useContext(AuthContext);
 
 const TABS = [
-  { id: "live",    label: "Live Prices", icon: "📈" },
-  { id: "signals", label: "AI Signals",  icon: "⚡" },
-  { id: "trader",  label: "Auto-Trader", icon: "🤖" },
-  { id: "chat",    label: "AI Chat",     icon: "💬" },
+  { id: "prices",  label: "Live Prices" },
+  { id: "signals", label: "AI Signals"  },
+  { id: "trader",  label: "Auto-Trader" },
+  { id: "chat",    label: "AI Chat"     },
 ];
 
 export default function App() {
-  const [tab, setTab]           = useState("live");
-  const [watchlist, setWatchlist] = useState(DEFAULT_WATCHLIST);
-  const [wlLoaded, setWlLoaded]  = useState(false);
+  const auth = useAuth();
+  const [tab, setTab] = useState("prices");
+  const { prices, connected } = usePrices();
 
-  // Load watchlist from backend on startup
+  // Give api.js a way to get the current token without prop drilling
   useEffect(() => {
-    fetch(`${API}/api/watchlist/`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.symbols?.length > 0) {
-          setWatchlist(data.symbols);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setWlLoaded(true));
-  }, []);
+    setTokenGetter(() => auth.user?.getIdToken() ?? Promise.resolve(null));
+  }, [auth.user]);
 
-  // Persist add to backend
-  const addStock = async (symbol) => {
-    const sym = symbol.toUpperCase().trim();
-    if (!sym || watchlist.includes(sym)) return;
-    setWatchlist(prev => [...prev, sym]);
-    try {
-      await fetch(`${API}/api/watchlist/add`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol: sym }),
-      });
-    } catch {}
-  };
-
-  // Persist remove to backend
-  const removeStock = async (symbol) => {
-    setWatchlist(prev => prev.filter(s => s !== symbol));
-    try {
-      await fetch(`${API}/api/watchlist/remove`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol }),
-      });
-    } catch {}
-  };
-
-  if (!wlLoaded) {
+  // ── Loading splash (auth state resolving) ────────────────────────────────
+  if (auth.user === undefined) {
     return (
-      <div style={{
-        minHeight: "100vh", background: "#0d1117",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontFamily: "'IBM Plex Mono', monospace", color: "#58a6ff", fontSize: 14,
-      }}>
-        <div>
-          <div style={{ fontSize: 24, marginBottom: 8, textAlign: "center" }}>SIGNAL // BOARD</div>
-          <div style={{ color: "#6e7681", fontSize: 11 }}>Loading watchlist...</div>
-        </div>
+      <div style={splash}>
+        <span style={splashText}>SignalBoard</span>
+        <span style={splashSub}>Loading…</span>
       </div>
     );
   }
 
-  return (
-    <div style={{ minHeight: "100vh", background: "#0d1117", display: "flex", flexDirection: "column" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
-      `}</style>
+  // ── Not logged in — show Login page ──────────────────────────────────────
+  if (!auth.user) {
+    return (
+      <Login
+        onLogin={auth.loginEmail}
+        onRegister={auth.registerEmail}
+        onGoogle={auth.loginGoogle}
+        error={auth.error}
+        loading={auth.loading}
+      />
+    );
+  }
 
-      {/* Nav — shown on non-live tabs */}
-      {tab !== "live" && (
-        <header style={{
-          display: "flex", alignItems: "center",
-          padding: "0 20px", height: 48,
-          background: "#010409", borderBottom: "1px solid #21262d", gap: 8,
-        }}>
-          <button onClick={() => setTab("live")} style={{
-            fontFamily: "'IBM Plex Mono', monospace",
-            fontSize: 14, fontWeight: 700, color: "#e6edf3",
-            marginRight: 12, background: "none", border: "none", cursor: "pointer",
-          }}>
-            SIGNAL <span style={{ color: "#58a6ff" }}>//</span> BOARD
-          </button>
+  // ── Logged in — show main app ─────────────────────────────────────────────
+  return (
+    <AuthContext.Provider value={auth}>
+      <div style={appWrap}>
+
+        {/* Header */}
+        <header style={header}>
+          <span style={logoText}>SignalBoard</span>
+          <div style={headerRight}>
+            <span style={wsStatus}>
+              {connected ? "🟢 Live" : "🔴 Offline"}
+            </span>
+            <span style={userEmail}>
+              {auth.user.email || auth.user.displayName}
+            </span>
+            <button style={logoutBtn} onClick={auth.logout}>Sign out</button>
+          </div>
+        </header>
+
+        {/* Tab bar */}
+        <nav style={tabBar}>
           {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "5px 12px", borderRadius: 8,
-              background: tab === t.id ? "#1f6feb" : "transparent",
-              color: tab === t.id ? "#fff" : "#8b949e",
-              fontFamily: "'IBM Plex Mono', monospace", fontSize: 12,
-              fontWeight: tab === t.id ? 700 : 400,
-              border: tab === t.id ? "1px solid #1f6feb" : "1px solid transparent",
-              cursor: "pointer", transition: "all 0.15s",
-            }}>
-              {t.icon} {t.label}
+            <button
+              key={t.id}
+              style={{ ...tabBtn, ...(tab === t.id ? tabBtnActive : {}) }}
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
             </button>
           ))}
-        </header>
-      )}
+        </nav>
 
-      {/* Pages */}
-      <div style={{ flex: 1 }}>
-        {tab === "live" && (
-          <LiveDashboard
-            watchlist={watchlist}
-            onAdd={addStock}
-            onRemove={removeStock}
-            onNavigate={setTab}
-            tabs={TABS}
-            activeTab={tab}
-          />
-        )}
-        {tab !== "live" && (
-          <main style={{ padding: "20px", maxWidth: 1400, width: "100%", margin: "0 auto" }}>
-            {tab === "signals" && <Signals watchlist={watchlist} />}
-            {tab === "trader"  && <Trader  watchlist={watchlist} />}
-            {tab === "chat"    && <Chat    watchlist={watchlist} />}
-          </main>
-        )}
+        {/* Page content */}
+        <main style={main}>
+          {tab === "prices"  && <LiveDashboard prices={prices} connected={connected} />}
+          {tab === "signals" && <Signals prices={prices} />}
+          {tab === "trader"  && <Trader />}
+          {tab === "chat"    && <Chat />}
+        </main>
+
       </div>
-    </div>
+    </AuthContext.Provider>
   );
 }
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+const splash     = { minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", background:"#0d1117" };
+const splashText = { fontSize:28, fontWeight:700, color:"#e6edf3", letterSpacing:"-0.5px" };
+const splashSub  = { fontSize:14, color:"#8b949e", marginTop:8 };
+
+const appWrap    = { minHeight:"100vh", display:"flex", flexDirection:"column", background:"var(--color-bg,#0d1117)", color:"var(--color-text,#e6edf3)" };
+const header     = { display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 1.5rem", height:52, borderBottom:"1px solid var(--color-border,#30363d)", background:"var(--color-surface,#161b22)" };
+const logoText   = { fontSize:18, fontWeight:700, color:"var(--color-text,#e6edf3)", letterSpacing:"-0.5px" };
+const headerRight= { display:"flex", alignItems:"center", gap:12 };
+const wsStatus   = { fontSize:12 };
+const userEmail  = { fontSize:12, color:"#8b949e", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" };
+const logoutBtn  = { padding:"4px 10px", background:"transparent", border:"1px solid #30363d", borderRadius:6, color:"#8b949e", fontSize:12, cursor:"pointer" };
+
+const tabBar     = { display:"flex", borderBottom:"1px solid var(--color-border,#30363d)", background:"var(--color-surface,#161b22)", padding:"0 1rem" };
+const tabBtn     = { padding:"10px 16px", border:"none", borderBottom:"2px solid transparent", background:"transparent", color:"#8b949e", fontSize:13, fontWeight:500, cursor:"pointer", transition:"all 0.15s" };
+const tabBtnActive = { color:"#e6edf3", borderBottomColor:"#2ea043" };
+
+const main       = { flex:1, overflow:"auto", padding:"1.5rem" };
