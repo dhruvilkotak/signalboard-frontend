@@ -68,3 +68,23 @@ export const getAlerts   = ()         => get("/api/alerts");
 // ── Chat ──────────────────────────────────────────────────────────────────────
 export const sendChat = (message, watchlist = []) =>
   post("/api/chat", { message, watchlist });
+
+// ── WebSocket price stream ────────────────────────────────────────────────────
+export function connectPriceStream(onMessage, onClose) {
+  const WS = import.meta.env.VITE_WS_URL || "wss://signalboard.duckdns.org";
+  const ws = new WebSocket(`${WS}/ws/prices`);
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      onMessage(data);
+    } catch (e) {
+      console.error("WS parse error", e);
+    }
+  };
+
+  ws.onclose = () => { if (onClose) onClose(); };
+  ws.onerror = (e) => console.error("WS error", e);
+
+  return ws;
+}
