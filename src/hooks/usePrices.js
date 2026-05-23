@@ -1,6 +1,6 @@
 // src/hooks/usePrices.js — manages price fetching and WebSocket connection
 import { useState, useEffect, useCallback } from "react"
-import { api, connectPriceStream } from "../lib/api"
+import { getPrices, connectPriceStream } from "../lib/api"
 
 export function usePrices() {
   const [prices, setPrices]       = useState({})
@@ -10,7 +10,7 @@ export function usePrices() {
 
   const fetchPrices = useCallback(async () => {
     try {
-      const data = await api.prices.all()
+      const data = await getPrices()
       setPrices(data)
       setError(null)
     } catch (e) {

@@ -1,6 +1,6 @@
 // src/pages/Signals.jsx
 import { useState, useEffect, useCallback } from "react";
-import { api } from "../lib/api";
+import { getSignals, analyzeOne } from "../lib/api";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -60,7 +60,7 @@ export default function Signals({ watchlist = [] }) {
       console.error(e);
       // Fallback to GET cached signals
       try {
-        const data = await api.signals.all();
+        const data = await getSignals();
         setSignals(data);
       } catch {}
     }
@@ -70,7 +70,7 @@ export default function Signals({ watchlist = [] }) {
   const fetchOne = async (symbol) => {
     setAnalyzing(symbol);
     try {
-      const data = await api.signals.one(symbol, true);
+      const data = await analyzeOne(symbol);
       setSignals(prev => ({ ...prev, [symbol]: data }));
     } catch (e) { console.error(e); }
     setAnalyzing(null);
