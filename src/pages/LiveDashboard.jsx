@@ -90,7 +90,7 @@ function SearchBar({ watchlist, onAdd }) {
     setLoading(true);
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`${API}/api/watchlist/search?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`${API}/api/quote/${query.toUpperCase().trim()}`);
         if (res.ok) {
           const data = await res.json();
           setResults(data.results || []);
