@@ -3,6 +3,8 @@
 .env.production
 .env.example
 
+example.env
+
 # Build output
 dist/
 build/
