@@ -1,6 +1,6 @@
 // src/pages/Trader.jsx
 import { useState, useEffect } from "react";
-import { api } from "../lib/api";
+import { getTrader, getTrades, analyzeAll } from "../lib/api";
 
 export default function Trader({ watchlist = [] }) {
   const [perf,      setPerf]      = useState(null);
@@ -13,9 +13,9 @@ export default function Trader({ watchlist = [] }) {
     try {
       setError(null);
       const [p, pos, t] = await Promise.all([
-        api.trader.performance(),
-        api.trader.positions(),
-        api.trader.trades(),
+        getTrader(),
+        getTrader(),
+        getTrades(),
       ]);
       setPerf(p); setPositions(pos); setTrades(t);
     } catch (e) {
@@ -29,7 +29,7 @@ export default function Trader({ watchlist = [] }) {
   const runAll = async () => {
     setRunning(true);
     try {
-      await api.trader.runAll();
+      await analyzeAll();
       await load();
     } catch (e) { console.error(e); }
     setRunning(false);
