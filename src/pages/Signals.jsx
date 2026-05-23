@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { getSignals, analyzeOne } from "../lib/api";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 
 const SIG_COLOR = {
   BUY:  { color: "var(--signal-buy)",  bg: "#0fffa315", border: "#0fffa350" },

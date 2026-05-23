@@ -94,7 +94,7 @@ export default function App() {
           {tab === "prices"  && <LiveDashboard prices={prices} connected={connected} />}
           {tab === "signals" && <Signals prices={prices} />}
           {tab === "trader"  && <Trader />}
-          {tab === "chat"    && <Chat />}
+          {tab === "chat"    && <Chat watchlist={[]} />}
         </main>
 
       </div>
