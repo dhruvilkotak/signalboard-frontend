@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-const API    = import.meta.env.VITE_API_URL || "http://localhost:8000";
-const WS_URL = (import.meta.env.VITE_WS_URL || "ws://localhost:8000")
+const API    = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
+const WS_URL = (import.meta.env.VITE_WS_URL || "wss://signalboard.duckdns.org")
   .replace("https://", "wss://").replace("http://", "ws://");
 
 // TradingView symbol map
