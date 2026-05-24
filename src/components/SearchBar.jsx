@@ -17,7 +17,7 @@ export default function SearchBar({ watchlist = [], onAdd }) {
     if (!q.trim()) { setResults([]); setOpen(false); return; }
     setLoading(true);
     try {
-      const res  = await fetch(`${API}/api/search?q=${encodeURIComponent(q)}`);
+      const res  = await fetch(`${API}/api/search/?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       setResults(Array.isArray(data) ? data : []);
       setOpen(true);
