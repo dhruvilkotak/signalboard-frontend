@@ -93,7 +93,7 @@ function SearchBar({ watchlist, onAdd }) {
         const res = await fetch(`${API}/api/quote/${query.toUpperCase().trim()}`);
         if (res.ok) {
           const data = await res.json();
-          setResults(data.results || []);
+          setResults(data.symbol ? [data] : (data.results || []));
           setOpen(true);
         }
       } catch {}
