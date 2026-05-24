@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import SearchBar from "../components/SearchBar";
 
 const API    = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 const WS_URL = (import.meta.env.VITE_WS_URL || "wss://signalboard.duckdns.org")
@@ -74,118 +75,6 @@ function useFlash(val) {
     prev.current = val;
   }, [val]);
   return flash;
-}
-
-// ── Search bar with autocomplete ──────────────────────────────────────────────
-function SearchBar({ watchlist, onAdd }) {
-  const [query,    setQuery]    = useState("");
-  const [results,  setResults]  = useState([]);
-  const [open,     setOpen]     = useState(false);
-  const [loading,  setLoading]  = useState(false);
-  const ref = useRef(null);
-
-  // Debounced search
-  useEffect(() => {
-    if (!query.trim()) { setResults([]); setOpen(false); return; }
-    setLoading(true);
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch(`${API}/api/quote/${query.toUpperCase().trim()}`);
-        if (res.ok) {
-          const data = await res.json();
-          setResults(data.symbol ? [data] : (data.results || []));
-          setOpen(true);
-        }
-      } catch {}
-      setLoading(false);
-    }, 200);
-    return () => clearTimeout(t);
-  }, [query]);
-
-  // Close on outside click
-  useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const handleAdd = (symbol) => {
-    onAdd(symbol);
-    setQuery("");
-    setResults([]);
-    setOpen(false);
-  };
-
-  const typeColor = { ETF:"#58a6ff", STOCK:"#3fb950", CRYPTO:"#e3b341", COMMODITY:"#f85149", FOREX:"#a371f7" };
-
-  return (
-    <div ref={ref} style={{ position: "relative", width: 260 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6,
-        background: "#161b22", border: "1px solid #30363d",
-        borderRadius: 8, padding: "5px 10px",
-      }}>
-        <span style={{ color: "#6e7681", fontSize: 13 }}>🔍</span>
-        <input
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onFocus={() => query && setOpen(true)}
-          placeholder="Search stocks, ETFs, crypto..."
-          style={{
-            flex: 1, background: "none", border: "none", outline: "none",
-            color: "#e6edf3", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11,
-          }}
-        />
-        {loading && <span style={{ color: "#6e7681", fontSize: 10 }}>⟳</span>}
-      </div>
-
-      {/* Dropdown */}
-      {open && results.length > 0 && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
-          background: "#161b22", border: "1px solid #30363d",
-          borderRadius: 8, zIndex: 1000, maxHeight: 320, overflowY: "auto",
-          boxShadow: "0 8px 32px #00000060",
-        }}>
-          {results.map(r => {
-            const already = watchlist.includes(r.symbol);
-            return (
-              <div key={r.symbol}
-                onClick={() => !already && handleAdd(r.symbol)}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "8px 12px", cursor: already ? "default" : "pointer",
-                  borderBottom: "1px solid #21262d",
-                  background: "transparent",
-                  opacity: already ? 0.5 : 1,
-                  transition: "background 0.1s",
-                }}
-                onMouseEnter={e => { if (!already) e.currentTarget.style.background = "#21262d"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-              >
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, fontWeight: 700, color: "#e6edf3" }}>
-                      {r.symbol}
-                    </span>
-                    <span style={{
-                      fontSize: 8, padding: "1px 4px", borderRadius: 3,
-                      background: `${typeColor[r.type] || "#58a6ff"}20`,
-                      color: typeColor[r.type] || "#58a6ff",
-                    }}>{r.type}</span>
-                    <span style={{ fontSize: 9, color: "#6e7681" }}>{r.sector}</span>
-                  </div>
-                  <div style={{ fontSize: 10, color: "#6e7681", marginTop: 1 }}>{r.name}</div>
-                </div>
-                <span style={{ fontSize: 16, color: already ? "#6e7681" : "#58a6ff", fontWeight: 700 }}>
-                  {already ? "✓" : "+"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
 }
 
 // ── Ticker row ────────────────────────────────────────────────────────────────
