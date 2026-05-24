@@ -47,8 +47,8 @@ export const getBatch    = (symbols)  => get(`/api/quote/batch/${symbols.join(",
 
 // ── Signals ───────────────────────────────────────────────────────────────────
 export const getSignals  = ()         => get("/api/signals");
-export const analyzeAll  = ()         => post("/api/signals/analyze-all");
-export const analyzeOne  = (symbol)   => post(`/api/signals/analyze/${symbol}`);
+export const analyzeAll  = ()         => post("/api/signals/run-all");
+export const analyzeOne  = (symbol)   => post(`/api/signals/${symbol}`);
 
 // ── Watchlist (protected — requires auth) ────────────────────────────────────
 export const getWatchlist    = ()       => get("/api/watchlist/");
