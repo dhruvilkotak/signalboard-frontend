@@ -41,7 +41,7 @@ async function del(path) {
 }
 
 // ── Prices ────────────────────────────────────────────────────────────────────
-export const getPrices   = ()         => get("/api/prices");
+export const getPrices   = ()         => get("/api/prices/");
 export const getQuote    = (symbol)   => get(`/api/quote/${symbol}`);
 export const getBatch    = (symbols)  => get(`/api/quote/batch/${symbols.join(",")}`);
 

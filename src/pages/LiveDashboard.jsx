@@ -192,7 +192,7 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
         {/* Logo + status */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, fontWeight: 700, color: "#e6edf3" }}>
-            SIGNAL <span style={{ color: "#58a6ff" }}>//</span> BOARD
+            SIGNAL BOARD
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <div style={{
