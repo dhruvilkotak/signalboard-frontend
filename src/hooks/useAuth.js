@@ -1,39 +1,50 @@
 // src/hooks/useAuth.js
-// Provides current user + token across the whole app
-// Used in App.jsx via context, and called directly in api.js
+// Auth hook — includes isAdmin check via Firestore admins collection
 
 import { useState, useEffect } from "react";
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signInWithPopup,
   signOut,
 } from "firebase/auth";
-import { auth, provider } from "../lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, provider, db } from "../lib/firebase";
 
 export function useAuth() {
   const [user,    setUser]    = useState(undefined); // undefined = loading
   const [token,   setToken]   = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [error,   setError]   = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Listen for auth state changes — runs once on mount
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        // Get token
         const idToken = await firebaseUser.getIdToken();
         setToken(idToken);
         setUser(firebaseUser);
-        // Refresh token every 50 minutes (expires at 60)
+
+        // Check if admin — look up admins/{uid} in Firestore
+        try {
+          const adminDoc = await getDoc(doc(db, "admins", firebaseUser.uid));
+          setIsAdmin(adminDoc.exists());
+        } catch (e) {
+          setIsAdmin(false);
+        }
+
+        // Refresh token every 50 min
         const interval = setInterval(async () => {
           const refreshed = await firebaseUser.getIdToken(true);
           setToken(refreshed);
         }, 50 * 60 * 1000);
         return () => clearInterval(interval);
+
       } else {
         setUser(null);
         setToken(null);
+        setIsAdmin(false);
       }
     });
     return unsub;
@@ -44,18 +55,6 @@ export function useAuth() {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-    } catch (e) {
-      setError(friendlyError(e.code));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const registerEmail = async (email, password) => {
-    setError(null);
-    setLoading(true);
-    try {
-      await createUserWithEmailAndPassword(auth, email, password);
     } catch (e) {
       setError(friendlyError(e.code));
     } finally {
@@ -77,15 +76,14 @@ export function useAuth() {
 
   const logout = () => signOut(auth);
 
-  return { user, token, error, loading, loginEmail, registerEmail, loginGoogle, logout };
+  return { user, token, isAdmin, error, loading, loginEmail, loginGoogle, logout };
 }
 
 function friendlyError(code) {
   const map = {
     "auth/user-not-found":       "No account found with that email.",
     "auth/wrong-password":       "Incorrect password.",
-    "auth/email-already-in-use": "An account with this email already exists.",
-    "auth/weak-password":        "Password must be at least 6 characters.",
+    "auth/invalid-credential":   "Incorrect email or password.",
     "auth/invalid-email":        "Please enter a valid email address.",
     "auth/popup-closed-by-user": "Google sign-in was cancelled.",
     "auth/too-many-requests":    "Too many attempts. Please try again later.",

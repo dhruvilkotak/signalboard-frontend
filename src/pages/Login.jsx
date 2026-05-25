@@ -1,49 +1,31 @@
 // src/pages/Login.jsx
-// Login + Register page — shown when user is not authenticated
+// Sign In only — no open registration (invite-only system)
 
 import { useState } from "react";
 
-export default function Login({ onLogin, onRegister, onGoogle, error, loading }) {
-  const [mode,     setMode]     = useState("login"); // "login" | "register"
+export default function Login({ onLogin, onGoogle, error, loading }) {
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
-  const [confirm,  setConfirm]  = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (mode === "register") {
-      if (password !== confirm) return alert("Passwords don't match");
-      onRegister(email, password);
-    } else {
-      onLogin(email, password);
-    }
+    onLogin(email, password);
   };
 
   return (
     <div style={styles.bg}>
       <div style={styles.card}>
+
         {/* Logo */}
         <div style={styles.logo}>
           <span style={styles.logoText}>SignalBoard</span>
-          <span style={styles.logoSub}>AI Stock Signals</span>
-        </div>
-
-        {/* Tab toggle */}
-        <div style={styles.tabs}>
-          <button
-            style={{ ...styles.tab, ...(mode === "login"    ? styles.tabActive : {}) }}
-            onClick={() => setMode("login")}
-          >Sign In</button>
-          <button
-            style={{ ...styles.tab, ...(mode === "register" ? styles.tabActive : {}) }}
-            onClick={() => setMode("register")}
-          >Create Account</button>
+          <span style={styles.logoSub}>AI Stock Signals • Invite Only</span>
         </div>
 
         {/* Error */}
         {error && <div style={styles.error}>{error}</div>}
 
-        {/* Form */}
+        {/* Sign in form */}
         <form onSubmit={handleSubmit} style={styles.form}>
           <input
             style={styles.input}
@@ -61,20 +43,10 @@ export default function Login({ onLogin, onRegister, onGoogle, error, loading })
             value={password}
             onChange={e => setPassword(e.target.value)}
             required
-            autoComplete={mode === "register" ? "new-password" : "current-password"}
+            autoComplete="current-password"
           />
-          {mode === "register" && (
-            <input
-              style={styles.input}
-              type="password"
-              placeholder="Confirm password"
-              value={confirm}
-              onChange={e => setConfirm(e.target.value)}
-              required
-            />
-          )}
           <button style={styles.btnPrimary} type="submit" disabled={loading}>
-            {loading ? "Please wait…" : mode === "login" ? "Sign In" : "Create Account"}
+            {loading ? "Signing in…" : "Sign In"}
           </button>
         </form>
 
@@ -97,8 +69,12 @@ export default function Login({ onLogin, onRegister, onGoogle, error, loading })
         </button>
 
         <p style={styles.footer}>
-          Your watchlist and signals are saved to your account.
+          Need access?{" "}
+          <a href="mailto:kotakdhruvil@gmail.com" style={styles.link}>
+            Request an invite
+          </a>
         </p>
+
       </div>
     </div>
   );
@@ -123,11 +99,11 @@ const styles = {
   },
   logo: {
     textAlign: "center",
-    marginBottom: "1.5rem",
+    marginBottom: "1.75rem",
   },
   logoText: {
     display: "block",
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: 700,
     color: "var(--color-text, #e6edf3)",
     letterSpacing: "-0.5px",
@@ -136,32 +112,8 @@ const styles = {
     display: "block",
     fontSize: 12,
     color: "var(--color-text-muted, #8b949e)",
-    marginTop: 2,
-  },
-  tabs: {
-    display: "flex",
-    background: "var(--color-bg, #0d1117)",
-    borderRadius: 8,
-    padding: 3,
-    marginBottom: "1.25rem",
-    gap: 3,
-  },
-  tab: {
-    flex: 1,
-    padding: "7px 0",
-    border: "none",
-    borderRadius: 6,
-    cursor: "pointer",
-    fontSize: 13,
-    fontWeight: 500,
-    background: "transparent",
-    color: "var(--color-text-muted, #8b949e)",
-    transition: "all 0.15s",
-  },
-  tabActive: {
-    background: "var(--color-surface, #161b22)",
-    color: "var(--color-text, #e6edf3)",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+    marginTop: 4,
+    letterSpacing: "0.02em",
   },
   error: {
     background: "#3d1515",
@@ -198,7 +150,6 @@ const styles = {
     fontWeight: 600,
     cursor: "pointer",
     marginTop: 4,
-    transition: "opacity 0.15s",
   },
   divider: {
     display: "flex",
@@ -228,7 +179,6 @@ const styles = {
     fontSize: 14,
     fontWeight: 500,
     cursor: "pointer",
-    transition: "border-color 0.15s",
   },
   footer: {
     textAlign: "center",
@@ -236,5 +186,9 @@ const styles = {
     color: "var(--color-text-muted, #8b949e)",
     marginTop: "1.25rem",
     marginBottom: 0,
+  },
+  link: {
+    color: "#58a6ff",
+    textDecoration: "none",
   },
 };
