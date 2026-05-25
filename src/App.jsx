@@ -101,6 +101,7 @@ export default function App() {
           <span style={logoText}>SignalBoard</span>
           <div style={headerRight}>
             <span style={wsStatus}>{connected ? "🟢 Live" : "🔴 Offline"}</span>
+            {auth.idleWarning && <span style={{fontSize:11,color:"#f0a000",background:"#f0a00015",border:"1px solid #f0a00040",borderRadius:4,padding:"2px 8px"}}>⏱ Signing out in 5 min</span>}
             {auth.isAdmin && <span style={adminBadge}>Admin</span>}
             <span style={userEmail}>{auth.user.email || auth.user.displayName}</span>
             <button style={logoutBtn} onClick={auth.logout}>Sign out</button>
