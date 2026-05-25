@@ -1,7 +1,7 @@
 // src/hooks/useAuth.js
-// Auth hook — includes isAdmin check via Firestore admins collection
+// Auth hook — isAdmin check + 30-min idle auto sign-out
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -11,44 +11,77 @@ import {
 import { doc, getDoc } from "firebase/firestore";
 import { auth, provider, db } from "../lib/firebase";
 
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 min
+const WARN_BEFORE_MS  =  5 * 60 * 1000; // warn 5 min before
+
 export function useAuth() {
-  const [user,    setUser]    = useState(undefined); // undefined = loading
-  const [token,   setToken]   = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [error,   setError]   = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [user,        setUser]        = useState(undefined);
+  const [token,       setToken]       = useState(null);
+  const [isAdmin,     setIsAdmin]     = useState(false);
+  const [error,       setError]       = useState(null);
+  const [loading,     setLoading]     = useState(false);
+  const [idleWarning, setIdleWarning] = useState(false);
+
+  const idleTimer = useRef(null);
+  const warnTimer = useRef(null);
+
+  const resetIdleTimer = () => {
+    clearTimeout(idleTimer.current);
+    clearTimeout(warnTimer.current);
+    setIdleWarning(false);
+
+    warnTimer.current = setTimeout(() => {
+      setIdleWarning(true);
+    }, IDLE_TIMEOUT_MS - WARN_BEFORE_MS);
+
+    idleTimer.current = setTimeout(() => {
+      signOut(auth);
+    }, IDLE_TIMEOUT_MS);
+  };
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Get token
         const idToken = await firebaseUser.getIdToken();
         setToken(idToken);
         setUser(firebaseUser);
 
-        // Check if admin — look up admins/{uid} in Firestore
         try {
           const adminDoc = await getDoc(doc(db, "admins", firebaseUser.uid));
           setIsAdmin(adminDoc.exists());
-        } catch (e) {
+        } catch {
           setIsAdmin(false);
         }
 
-        // Refresh token every 50 min
         const interval = setInterval(async () => {
           const refreshed = await firebaseUser.getIdToken(true);
           setToken(refreshed);
         }, 50 * 60 * 1000);
-        return () => clearInterval(interval);
 
+        return () => clearInterval(interval);
       } else {
         setUser(null);
         setToken(null);
         setIsAdmin(false);
+        setIdleWarning(false);
+        clearTimeout(idleTimer.current);
+        clearTimeout(warnTimer.current);
       }
     });
     return unsub;
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const events = ["mousedown", "keydown", "scroll", "touchstart", "mousemove"];
+    events.forEach(e => window.addEventListener(e, resetIdleTimer));
+    resetIdleTimer();
+    return () => {
+      events.forEach(e => window.removeEventListener(e, resetIdleTimer));
+      clearTimeout(idleTimer.current);
+      clearTimeout(warnTimer.current);
+    };
+  }, [user]);
 
   const loginEmail = async (email, password) => {
     setError(null);
@@ -76,7 +109,7 @@ export function useAuth() {
 
   const logout = () => signOut(auth);
 
-  return { user, token, isAdmin, error, loading, loginEmail, loginGoogle, logout };
+  return { user, token, isAdmin, idleWarning, error, loading, loginEmail, loginGoogle, logout };
 }
 
 function friendlyError(code) {
