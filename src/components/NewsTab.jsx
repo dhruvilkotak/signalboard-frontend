@@ -1,39 +1,37 @@
 // src/components/NewsTab.jsx
-// Fetches news directly from Yahoo Finance — real-time, no backend needed
-// Falls back to backend if Yahoo CORS blocks the request
+// Fetches news directly from Yahoo Finance RSS — no CORS, no API key, real-time
+// Works for stocks AND ETFs (SPY, VOO, SCHD etc)
 
 import { useState, useEffect } from "react";
 
-const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
+async function fetchRSSNews(symbol) {
+  const rssUrl = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${symbol}&region=US&lang=en-US`;
+  const res    = await fetch(rssUrl);
+  if (!res.ok) throw new Error(`RSS fetch failed: ${res.status}`);
+  const text   = await res.text();
 
-async function fetchYahooNews(symbol) {
-  // Try Yahoo Finance directly first (faster, real-time)
-  try {
-    const res = await fetch(
-      `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(symbol)}&newsCount=10&quotesCount=0&listsCount=0`,
-      { headers: { "Accept": "application/json" } }
-    );
-    if (!res.ok) throw new Error("Yahoo direct failed");
-    const data = await res.json();
-    const items = data.news || [];
-    if (items.length > 0) {
-      return items.map(item => ({
-        id:         item.uuid || "",
-        headline:   item.title || "",
-        summary:    item.summary || "",
-        url:        item.link || "#",
-        source:     item.publisher || "Yahoo Finance",
-        created_at: new Date(item.providerPublishTime * 1000).toISOString(),
-      }));
-    }
-  } catch {
-    // CORS blocked — fall through to backend
-  }
+  const parser = new DOMParser();
+  const xml    = parser.parseFromString(text, "text/xml");
+  const items  = [...xml.querySelectorAll("item")];
 
-  // Fallback to backend proxy
-  const res = await fetch(`${API}/api/news/${symbol}/`);
-  if (!res.ok) throw new Error("News fetch failed");
-  return await res.json();
+  if (items.length === 0) return [];
+
+  return items.slice(0, 10).map(item => ({
+    id:         item.querySelector("guid")?.textContent || Math.random().toString(),
+    headline:   item.querySelector("title")?.textContent?.trim() || "",
+    url:        item.querySelector("link")?.nextSibling?.textContent?.trim() ||
+                item.querySelector("link")?.textContent?.trim() || "#",
+    source:     item.querySelector("source")?.textContent?.trim() || "Yahoo Finance",
+    created_at: (() => {
+      try {
+        return new Date(item.querySelector("pubDate")?.textContent || "").toISOString();
+      } catch { return new Date().toISOString(); }
+    })(),
+    summary:    item.querySelector("description")?.textContent
+                  ?.replace(/<[^>]*>/g, "")
+                  ?.trim()
+                  ?.slice(0, 200) || "",
+  }));
 }
 
 export default function NewsTab({ symbol }) {
@@ -47,9 +45,9 @@ export default function NewsTab({ symbol }) {
     setError(null);
     setArticles([]);
 
-    fetchYahooNews(symbol)
+    fetchRSSNews(symbol)
       .then(data => {
-        setArticles(Array.isArray(data) ? data : []);
+        setArticles(data);
         setLoading(false);
       })
       .catch(err => {
@@ -67,6 +65,7 @@ export default function NewsTab({ symbol }) {
 
   if (error) return (
     <div style={s.center}>
+      <div style={{ fontSize:40, marginBottom:12 }}>⚠️</div>
       <p style={s.muted}>{error}</p>
     </div>
   );
@@ -102,11 +101,7 @@ export default function NewsTab({ symbol }) {
             </div>
             <p style={s.headline}>{a.headline}</p>
             {a.summary && (
-              <p style={s.summary}>
-                {a.summary.length > 140
-                  ? a.summary.slice(0, 140) + "…"
-                  : a.summary}
-              </p>
+              <p style={s.summary}>{a.summary}</p>
             )}
             <span style={s.readMore}>Read more →</span>
           </a>
@@ -119,29 +114,33 @@ export default function NewsTab({ symbol }) {
 function formatTime(isoString) {
   if (!isoString) return "";
   try {
-    const date = new Date(isoString);
-    const diff = Math.floor((Date.now() - date) / 60000); // minutes
+    const diff = Math.floor((Date.now() - new Date(isoString)) / 60000);
+    if (diff < 1)    return "just now";
     if (diff < 60)   return `${diff}m ago`;
     if (diff < 1440) return `${Math.floor(diff / 60)}h ago`;
-    return date.toLocaleDateString("en-US", { month:"short", day:"numeric" });
-  } catch {
-    return "";
-  }
+    return new Date(isoString).toLocaleDateString("en-US", { month:"short", day:"numeric" });
+  } catch { return ""; }
 }
 
 const s = {
   wrap:     { height:"100%", overflowY:"auto", background:"#0d1117" },
-  header:   { display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px 10px", borderBottom:"1px solid #21262d", position:"sticky", top:0, background:"#0d1117" },
+  header:   { display:"flex", alignItems:"center", justifyContent:"space-between",
+              padding:"14px 16px 10px", borderBottom:"1px solid #21262d",
+              position:"sticky", top:0, background:"#0d1117", zIndex:1 },
   title:    { fontSize:15, fontWeight:700, color:"#e6edf3" },
   count:    { fontSize:12, color:"#8b949e", background:"#21262d", padding:"2px 8px", borderRadius:10 },
   list:     { padding:"8px 12px", display:"flex", flexDirection:"column", gap:8 },
-  card:     { display:"block", textDecoration:"none", background:"#161b22", border:"1px solid #30363d", borderRadius:8, padding:"12px 14px", transition:"border-color 0.15s" },
+  card:     { display:"block", textDecoration:"none", background:"#161b22",
+              border:"1px solid #30363d", borderRadius:8, padding:"12px 14px",
+              transition:"border-color 0.15s" },
   cardTop:  { display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 },
-  source:   { fontSize:11, color:"#58a6ff", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.03em" },
+  source:   { fontSize:11, color:"#58a6ff", fontWeight:600,
+              textTransform:"uppercase", letterSpacing:"0.03em" },
   time:     { fontSize:11, color:"#6e7681" },
   headline: { fontSize:13, fontWeight:600, color:"#e6edf3", lineHeight:1.5, margin:"0 0 6px" },
   summary:  { fontSize:12, color:"#8b949e", lineHeight:1.5, margin:"0 0 8px" },
   readMore: { fontSize:11, color:"#58a6ff" },
-  center:   { height:"100%", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, padding:"2rem" },
+  center:   { height:"100%", display:"flex", flexDirection:"column",
+              alignItems:"center", justifyContent:"center", gap:8, padding:"2rem" },
   muted:    { fontSize:13, color:"#8b949e", textAlign:"center" },
 };
