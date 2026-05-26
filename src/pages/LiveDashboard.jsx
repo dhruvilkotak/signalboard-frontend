@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import NewsTab from "../components/NewsTab";
 import SearchBar from "../components/SearchBar";
 
 const API    = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
@@ -398,7 +399,7 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
               <iframe key={`tech-${selected}`} src={tvTechnical(selected)} width="100%" height="100%" />
             </div>
             <div style={{ display: innerTab === "news"      ? "block" : "none", height: "100%" }}>
-              <iframe key={`news-${selected}`} src={tvNews(selected)} width="100%" height="100%" />
+              <NewsTab symbol={selected} />
             </div>
             <div style={{ display: innerTab === "info" ? "flex" : "none", flexDirection: "column", height: "100%", overflowY: "auto" }}>
               <iframe key={`sinfo-${selected}`} src={tvSymInfo(selected)} width="100%" height="160" style={{ flexShrink: 0 }} />
