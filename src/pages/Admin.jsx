@@ -22,7 +22,7 @@ function generateCode() {
 
 export default function Admin() {
   const { user } = useAuthContext();
-  const [activeTab, setActiveTab] = useState("invites");
+  const [activeTab, setActiveTab] = useState("pending");
 
   return (
     <div style={wrap}>
@@ -34,6 +34,7 @@ export default function Admin() {
       {/* Sub-tabs */}
       <div style={tabBar}>
         {[
+          { id: "pending", label: "👤 Pending Users" },
           { id: "invites", label: "📨 Invites" },
           { id: "tickers", label: "📈 Signal Tickers" },
           { id: "links",   label: "🔗 Quick Links" },
@@ -47,6 +48,7 @@ export default function Admin() {
       </div>
 
       <div style={content}>
+        {activeTab === "pending" && <PendingUsers />}
         {activeTab === "invites" && <InviteManager />}
         {activeTab === "tickers" && <TickerManager />}
         {activeTab === "links"   && <QuickLinks />}
@@ -383,3 +385,124 @@ const tickerLabel = { fontSize:13, fontWeight:600, color:"#e6edf3" };
 const chipRemove  = { background:"none", border:"none", color:"#f85149", cursor:"pointer", fontSize:16, lineHeight:1, padding:0 };
 const linksGrid   = { display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(180px, 1fr))", gap:12 };
 const linkCard    = { display:"flex", flexDirection:"column", gap:8, padding:"1rem", background:"#0d1117", border:"1px solid #30363d", borderRadius:8, textDecoration:"none", transition:"border-color 0.15s" };
+
+// ── ADDITION: Add "👤 Pending" tab to the Admin component ─────────────────
+// Replace the sub-tabs array in Admin() with this:
+// { id: "pending", label: "👤 Pending Users" },
+// And add: {activeTab === "pending" && <PendingUsers />}
+
+function PendingUsers() {
+  const [users,   setUsers]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [msg,     setMsg]     = useState(null);
+  const { user: adminUser } = useAuthContext();
+
+  useEffect(() => { loadPending(); }, []);
+
+  async function loadPending() {
+    try {
+      const { collection, query, where, getDocs } = await import("firebase/firestore");
+      const q = query(collection(db, "users"), where("status", "==", "pending"));
+      const snap = await getDocs(q);
+      setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function approve(uid, email, name) {
+    if (!confirm(`Approve ${name} (${email})?`)) return;
+    try {
+      const { doc, updateDoc, serverTimestamp } = await import("firebase/firestore");
+      await updateDoc(doc(db, "users", uid), {
+        status:      "approved",
+        approved_at: serverTimestamp(),
+        approved_by: adminUser.uid,
+      });
+      setMsg({ type: "success", text: `${name} approved! Send them an email to let them know.` });
+      await loadPending();
+    } catch (e) {
+      setMsg({ type: "error", text: `Failed: ${e.message}` });
+    }
+  }
+
+  async function reject(uid, name) {
+    if (!confirm(`Reject and delete ${name}?`)) return;
+    try {
+      const { doc, deleteDoc } = await import("firebase/firestore");
+      await deleteDoc(doc(db, "users", uid));
+      await loadPending();
+    } catch (e) {
+      alert("Failed: " + e.message);
+    }
+  }
+
+  if (loading) return <div style={empty}>Loading…</div>;
+
+  return (
+    <div>
+      <p style={helpText}>
+        Users who have signed up and are awaiting your approval.
+        Once approved they can sign in and access the dashboard.
+      </p>
+
+      {msg && (
+        <div style={{
+          padding:"10px 14px", borderRadius:6, fontSize:13, marginBottom:16,
+          background: msg.type === "success" ? "#0d2e1a" : "#3d1515",
+          border: `1px solid ${msg.type === "success" ? "#3fb950" : "#f85149"}`,
+          color: msg.type === "success" ? "#3fb950" : "#f85149",
+        }}>{msg.text}</div>
+      )}
+
+      {users.length === 0 ? (
+        <div style={empty}>No pending users. 🎉</div>
+      ) : (
+        <table style={table}>
+          <thead>
+            <tr>
+              {["Name", "Email", "Provider", "Reason", "Signed Up", "Actions"].map(h => (
+                <th key={h} style={th}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {users.map(u => (
+              <tr key={u.id} style={tr}>
+                <td style={td}>{u.name || "—"}</td>
+                <td style={td}>{u.email}</td>
+                <td style={td}>
+                  <span style={{ fontSize:11, background:"#21262d", padding:"2px 6px", borderRadius:4, color:"#8b949e" }}>
+                    {u.provider || "email"}
+                  </span>
+                </td>
+                <td style={{ ...td, maxWidth:200, whiteSpace:"normal" }}>
+                  <span style={{ fontSize:12, color:"#8b949e" }}>{u.reason || "—"}</span>
+                </td>
+                <td style={td}>
+                  <span style={{ fontSize:12, color:"#8b949e" }}>
+                    {u.created_at?.toDate?.()?.toLocaleDateString() || "—"}
+                  </span>
+                </td>
+                <td style={td}>
+                  <div style={{ display:"flex", gap:6 }}>
+                    <button
+                      style={{ padding:"5px 12px", background:"#238636", border:"1px solid #2ea043", borderRadius:4, color:"#fff", fontSize:12, cursor:"pointer", fontWeight:600 }}
+                      onClick={() => approve(u.id, u.email, u.name)}
+                    >✓ Approve</button>
+                    <button
+                      style={{ padding:"5px 10px", background:"transparent", border:"1px solid #f8514960", borderRadius:4, color:"#f85149", fontSize:12, cursor:"pointer" }}
+                      onClick={() => reject(u.id, u.name)}
+                    >✕ Reject</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}

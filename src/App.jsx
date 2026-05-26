@@ -8,6 +8,7 @@ import { usePrices } from "./hooks/usePrices";
 
 import Login         from "./pages/Login";
 import LiveDashboard from "./pages/LiveDashboard";
+import PendingScreen from "./pages/PendingScreen";
 import Signals       from "./pages/Signals";
 import Trader        from "./pages/Trader";
 import Chat          from "./pages/Chat";
@@ -33,7 +34,7 @@ export default function App() {
 
   // Load watchlist from Firestore after login
   useEffect(() => {
-    if (!auth.user) return;
+    if (!auth.user || auth.isPending) return;  // ← add auth.isPending check
     getWatchlist()
       .then(data => setWatchlist(data.symbols || DEFAULT_TICKERS))
       .catch(() => setWatchlist(DEFAULT_TICKERS));
@@ -60,7 +61,7 @@ export default function App() {
     } catch (e) { console.error(e); }
   };
 
-  // ── Loading splash ────────────────────────────────────────────────────────
+  // ── Loading splash ──────────────────────────────────────────────────────────
   if (auth.user === undefined) {
     return (
       <div style={splash}>
@@ -70,7 +71,7 @@ export default function App() {
     );
   }
 
-  // ── Not logged in → Login page ────────────────────────────────────────────
+  // ── Not logged in → Login page ─────────────────────────────────────────────
   if (!auth.user) {
     return (
       <Login
@@ -81,6 +82,13 @@ export default function App() {
       />
     );
   }
+
+  // ── Pending approval → show waiting screen ──────────────────────────────────
+  if (auth.isPending) {
+    return <PendingScreen user={auth.user} />;
+  }
+
+  // ── Approved user → load watchlist + main app ───────────────────────────────
 
   // ── Build tab list (admin gets extra tab) ─────────────────────────────────
   const TABS = [
