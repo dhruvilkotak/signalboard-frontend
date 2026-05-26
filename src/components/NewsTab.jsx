@@ -1,38 +1,10 @@
 // src/components/NewsTab.jsx
-// Fetches news directly from Yahoo Finance RSS — no CORS, no API key, real-time
-// Works for stocks AND ETFs (SPY, VOO, SCHD etc)
+// Fetches news via backend proxy (Yahoo Finance RSS)
+// Works for ANY symbol — admin tickers use cache, custom symbols fetch fresh
 
 import { useState, useEffect } from "react";
 
-async function fetchRSSNews(symbol) {
-  const rssUrl = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${symbol}&region=US&lang=en-US`;
-  const res    = await fetch(rssUrl);
-  if (!res.ok) throw new Error(`RSS fetch failed: ${res.status}`);
-  const text   = await res.text();
-
-  const parser = new DOMParser();
-  const xml    = parser.parseFromString(text, "text/xml");
-  const items  = [...xml.querySelectorAll("item")];
-
-  if (items.length === 0) return [];
-
-  return items.slice(0, 10).map(item => ({
-    id:         item.querySelector("guid")?.textContent || Math.random().toString(),
-    headline:   item.querySelector("title")?.textContent?.trim() || "",
-    url:        item.querySelector("link")?.nextSibling?.textContent?.trim() ||
-                item.querySelector("link")?.textContent?.trim() || "#",
-    source:     item.querySelector("source")?.textContent?.trim() || "Yahoo Finance",
-    created_at: (() => {
-      try {
-        return new Date(item.querySelector("pubDate")?.textContent || "").toISOString();
-      } catch { return new Date().toISOString(); }
-    })(),
-    summary:    item.querySelector("description")?.textContent
-                  ?.replace(/<[^>]*>/g, "")
-                  ?.trim()
-                  ?.slice(0, 200) || "",
-  }));
-}
+const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 
 export default function NewsTab({ symbol }) {
   const [articles, setArticles] = useState([]);
@@ -45,12 +17,16 @@ export default function NewsTab({ symbol }) {
     setError(null);
     setArticles([]);
 
-    fetchRSSNews(symbol)
+    fetch(`${API}/api/news/${symbol}`)
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then(data => {
-        setArticles(data);
+        setArticles(Array.isArray(data) ? data : []);
         setLoading(false);
       })
-      .catch(err => {
+      .catch(() => {
         setError("Failed to load news.");
         setLoading(false);
       });
@@ -128,7 +104,8 @@ const s = {
               padding:"14px 16px 10px", borderBottom:"1px solid #21262d",
               position:"sticky", top:0, background:"#0d1117", zIndex:1 },
   title:    { fontSize:15, fontWeight:700, color:"#e6edf3" },
-  count:    { fontSize:12, color:"#8b949e", background:"#21262d", padding:"2px 8px", borderRadius:10 },
+  count:    { fontSize:12, color:"#8b949e", background:"#21262d",
+              padding:"2px 8px", borderRadius:10 },
   list:     { padding:"8px 12px", display:"flex", flexDirection:"column", gap:8 },
   card:     { display:"block", textDecoration:"none", background:"#161b22",
               border:"1px solid #30363d", borderRadius:8, padding:"12px 14px",
