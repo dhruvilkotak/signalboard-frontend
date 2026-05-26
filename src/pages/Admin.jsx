@@ -60,6 +60,7 @@ export default function Admin() {
 
 // ── Invite Manager ────────────────────────────────────────────────────────────
 function InviteManager() {
+  const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
   const [email,   setEmail]   = useState("");
   const [notes,   setNotes]   = useState("");
   const [invites, setInvites] = useState([]);
@@ -86,25 +87,28 @@ function InviteManager() {
     setLoading(true);
     setMsg(null);
     try {
-      const code = generateCode();
-      const expires = new Date();
-      expires.setDate(expires.getDate() + 7);
-
-      await setDoc(doc(db, "invites", code), {
-        email:            email.trim().toLowerCase(),
-        used:             false,
-        created_at:       serverTimestamp(),
-        expires_at:       expires.toISOString(),
-        notes:            notes.trim(),
-        created_by:       user.uid,
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch(`${API}/api/admin/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ email: email.trim(), notes: notes.trim() }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to send invite");
 
-      setMsg({ type: "success", text: `Invite sent! Code: ${code} → ${email}` });
+      if (data.email_sent) {
+        setMsg({ type: "success", text: `✅ Invite sent! Code: ${data.code} → ${email}` });
+      } else {
+        setMsg({
+          type: "warning",
+          text: `✅ Invite created (${data.code}) but email failed to send to ${email}.`,
+        });
+      }
       setEmail("");
       setNotes("");
       await loadInvites();
     } catch (e) {
-      setMsg({ type: "error", text: `Failed: ${e.message}` });
+      setMsg({ type: "error", text: `❌ Failed: ${e.message}` });
     } finally {
       setLoading(false);
     }
@@ -152,11 +156,16 @@ function InviteManager() {
 
       {msg && (
         <div style={{
-          padding: "10px 14px", borderRadius: 6, fontSize: 13, marginTop: 12,
-          background: msg.type === "success" ? "#0d2e1a" : "#3d1515",
-          border: `1px solid ${msg.type === "success" ? "#3fb950" : "#f85149"}`,
-          color: msg.type === "success" ? "#3fb950" : "#f85149",
-        }}>{msg.text}</div>
+          padding:"10px 14px", borderRadius:6, fontSize:13, marginTop:12,
+          display:"flex", alignItems:"center", justifyContent:"space-between", gap:12,
+          background: msg.type === "success" ? "#0d2e1a" : msg.type === "warning" ? "#2d2010" : "#3d1515",
+          border: `1px solid ${msg.type === "success" ? "#3fb950" : msg.type === "warning" ? "#f0a000" : "#f85149"}`,
+          color: msg.type === "success" ? "#3fb950" : msg.type === "warning" ? "#f0a000" : "#f85149",
+        }}>
+          <span>{msg.text}</span>
+          <button style={{ background:"none", border:"none", color:"inherit", cursor:"pointer", fontSize:16, padding:0 }}
+            onClick={() => setMsg(null)}>✕</button>
+        </div>
       )}
 
       <h2 style={{ ...sectionTitle, marginTop: "2rem" }}>
@@ -302,11 +311,16 @@ function TickerManager() {
 
       {msg && (
         <div style={{
-          padding: "10px 14px", borderRadius: 6, fontSize: 13, marginTop: 12,
-          background: msg.type === "success" ? "#0d2e1a" : "#3d1515",
-          border: `1px solid ${msg.type === "success" ? "#3fb950" : "#f85149"}`,
-          color: msg.type === "success" ? "#3fb950" : "#f85149",
-        }}>{msg.text}</div>
+          padding:"10px 14px", borderRadius:6, fontSize:13, marginTop:12,
+          display:"flex", alignItems:"center", justifyContent:"space-between", gap:12,
+          background: msg.type === "success" ? "#0d2e1a" : msg.type === "warning" ? "#2d2010" : "#3d1515",
+          border: `1px solid ${msg.type === "success" ? "#3fb950" : msg.type === "warning" ? "#f0a000" : "#f85149"}`,
+          color: msg.type === "success" ? "#3fb950" : msg.type === "warning" ? "#f0a000" : "#f85149",
+        }}>
+          <span>{msg.text}</span>
+          <button style={{ background:"none", border:"none", color:"inherit", cursor:"pointer", fontSize:16, padding:0 }}
+            onClick={() => setMsg(null)}>✕</button>
+        </div>
       )}
 
       <div style={{ marginTop: "1.5rem" }}>
