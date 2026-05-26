@@ -1,5 +1,5 @@
 // src/hooks/useAuth.js
-// Auth hook — isAdmin check + 30-min idle auto sign-out
+// Auth — pending status check + isAdmin + 30-min idle auto sign-out
 
 import { useState, useEffect, useRef } from "react";
 import {
@@ -11,13 +11,15 @@ import {
 import { doc, getDoc } from "firebase/firestore";
 import { auth, provider, db } from "../lib/firebase";
 
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 min
-const WARN_BEFORE_MS  =  5 * 60 * 1000; // warn 5 min before
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const WARN_BEFORE_MS  =  5 * 60 * 1000;
+const ADMIN_UIDS      = ["2fKDBFccZVOwlyaU6QIs4rQTNKb2"];
 
 export function useAuth() {
   const [user,        setUser]        = useState(undefined);
   const [token,       setToken]       = useState(null);
   const [isAdmin,     setIsAdmin]     = useState(false);
+  const [isPending,   setIsPending]   = useState(false);
   const [error,       setError]       = useState(null);
   const [loading,     setLoading]     = useState(false);
   const [idleWarning, setIdleWarning] = useState(false);
@@ -29,40 +31,87 @@ export function useAuth() {
     clearTimeout(idleTimer.current);
     clearTimeout(warnTimer.current);
     setIdleWarning(false);
-
-    warnTimer.current = setTimeout(() => {
-      setIdleWarning(true);
-    }, IDLE_TIMEOUT_MS - WARN_BEFORE_MS);
-
-    idleTimer.current = setTimeout(() => {
-      signOut(auth);
-    }, IDLE_TIMEOUT_MS);
+    warnTimer.current = setTimeout(() => setIdleWarning(true), IDLE_TIMEOUT_MS - WARN_BEFORE_MS);
+    idleTimer.current = setTimeout(() => signOut(auth), IDLE_TIMEOUT_MS);
   };
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const idToken = await firebaseUser.getIdToken();
-        setToken(idToken);
-        setUser(firebaseUser);
-
-        try {
-          const adminDoc = await getDoc(doc(db, "admins", firebaseUser.uid));
-          setIsAdmin(adminDoc.exists());
-        } catch {
-          setIsAdmin(false);
+        // Admins always bypass
+        if (ADMIN_UIDS.includes(firebaseUser.uid)) {
+          const idToken = await firebaseUser.getIdToken();
+          setToken(idToken);
+          setUser(firebaseUser);
+          setIsAdmin(true);
+          setIsPending(false);
+          setError(null);
+          const iv = setInterval(async () => {
+            setToken(await firebaseUser.getIdToken(true));
+          }, 50 * 60 * 1000);
+          return () => clearInterval(iv);
         }
 
-        const interval = setInterval(async () => {
-          const refreshed = await firebaseUser.getIdToken(true);
-          setToken(refreshed);
-        }, 50 * 60 * 1000);
+        // Check user status in Firestore
+        try {
+          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
 
-        return () => clearInterval(interval);
+          if (!userDoc.exists()) {
+            // No profile — not registered via our signup form
+            await signOut(auth);
+            setError("No account found. Please request access first.");
+            setUser(null);
+            setToken(null);
+            return;
+          }
+
+          const data = userDoc.data();
+
+          if (data.status === "pending") {
+            // Account exists but not approved yet
+            setUser(firebaseUser);
+            setIsPending(true);
+            setError(null);
+            return;
+          }
+
+          if (data.status !== "approved") {
+            await signOut(auth);
+            setError("Your account has been suspended. Contact admin.");
+            setUser(null);
+            setToken(null);
+            return;
+          }
+
+          // Approved — full access
+          const idToken = await firebaseUser.getIdToken();
+          setToken(idToken);
+          setUser(firebaseUser);
+          setIsPending(false);
+          setError(null);
+
+          try {
+            const adminDoc = await getDoc(doc(db, "admins", firebaseUser.uid));
+            setIsAdmin(adminDoc.exists());
+          } catch {
+            setIsAdmin(false);
+          }
+
+          const iv = setInterval(async () => {
+            setToken(await firebaseUser.getIdToken(true));
+          }, 50 * 60 * 1000);
+          return () => clearInterval(iv);
+
+        } catch (e) {
+          console.error("Auth check error:", e);
+          setUser(null);
+          setToken(null);
+        }
       } else {
         setUser(null);
         setToken(null);
         setIsAdmin(false);
+        setIsPending(false);
         setIdleWarning(false);
         clearTimeout(idleTimer.current);
         clearTimeout(warnTimer.current);
@@ -72,7 +121,7 @@ export function useAuth() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || isPending) return;
     const events = ["mousedown", "keydown", "scroll", "touchstart", "mousemove"];
     events.forEach(e => window.addEventListener(e, resetIdleTimer));
     resetIdleTimer();
@@ -81,7 +130,7 @@ export function useAuth() {
       clearTimeout(idleTimer.current);
       clearTimeout(warnTimer.current);
     };
-  }, [user]);
+  }, [user, isPending]);
 
   const loginEmail = async (email, password) => {
     setError(null);
@@ -109,7 +158,11 @@ export function useAuth() {
 
   const logout = () => signOut(auth);
 
-  return { user, token, isAdmin, idleWarning, error, loading, loginEmail, loginGoogle, logout };
+  return {
+    user, token, isAdmin, isPending,
+    idleWarning, error, loading,
+    loginEmail, loginGoogle, logout,
+  };
 }
 
 function friendlyError(code) {
