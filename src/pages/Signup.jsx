@@ -1,7 +1,7 @@
 // src/pages/Signup.jsx
-// Registration — choose Google OR email/password, not both
+// Registration — Google OR email/password + reCAPTCHA + Terms modal
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   createUserWithEmailAndPassword,
   signInWithPopup,
@@ -9,94 +9,122 @@ import {
 } from "firebase/auth";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, provider, db } from "../lib/firebase";
+import TermsModal from "../components/TermsModal";
+
+const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
 
 export default function Signup({ onBackToLogin }) {
-  const [method,   setMethod]   = useState(null); // null | "email" | "google"
-  const [step,     setStep]     = useState("form"); // form | pending
-  const [loading,  setLoading]  = useState(false);
-  const [errorMsg, setErrorMsg] = useState(null);
+  const [method,       setMethod]       = useState(null); // null | "email" | "google"
+  const [step,         setStep]         = useState("form"); // form | pending
+  const [loading,      setLoading]      = useState(false);
+  const [errorMsg,     setErrorMsg]     = useState(null);
+  const [showTerms,    setShowTerms]    = useState(false);
+  const [agreedTerms,  setAgreedTerms]  = useState(false);
+  const [captchaToken, setCaptchaToken] = useState(null);
+  const captchaRef = useRef(null);
+  const widgetId   = useRef(null);
 
   const [form, setForm] = useState({
-    name:       "",
-    email:      "",
-    password:   "",
-    confirm:    "",
-    reason:     "",
-    notRobot:   false,
-    agreeTerms: false,
-    agreePaper: false,
-    agreeData:  false,
+    name:    "",
+    email:   "",
+    password:"",
+    confirm: "",
+    reason:  "",
   });
-
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const validateCommon = () => {
+  // ── Load reCAPTCHA script ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (!method) return;
+    const scriptId = "recaptcha-script";
+    if (!document.getElementById(scriptId)) {
+      const script = document.createElement("script");
+      script.id  = scriptId;
+      script.src = "https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit";
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    }
+
+    window.onRecaptchaLoad = () => {
+      if (captchaRef.current && widgetId.current === null) {
+        widgetId.current = window.grecaptcha.render(captchaRef.current, {
+          sitekey:  RECAPTCHA_SITE_KEY,
+          callback: (token) => setCaptchaToken(token),
+          "expired-callback": () => setCaptchaToken(null),
+        });
+      }
+    };
+
+    if (window.grecaptcha && captchaRef.current && widgetId.current === null) {
+      widgetId.current = window.grecaptcha.render(captchaRef.current, {
+        sitekey:  RECAPTCHA_SITE_KEY,
+        callback: (token) => setCaptchaToken(token),
+        "expired-callback": () => setCaptchaToken(null),
+      });
+    }
+  }, [method]);
+
+  const validate = () => {
     if (!form.name.trim())   return "Please enter your full name.";
     if (!form.reason.trim()) return "Please tell us why you want access.";
-    if (!form.notRobot)      return "Please confirm you are not a robot.";
-    if (!form.agreeTerms)    return "Please agree to the Terms of Use.";
-    if (!form.agreePaper)    return "Please acknowledge this is paper trading only.";
-    if (!form.agreeData)     return "Please agree to the data use policy.";
+    if (!agreedTerms)        return "Please read and agree to the Terms of Use & Privacy Policy.";
+    if (!captchaToken)       return "Please complete the reCAPTCHA verification.";
+    if (method === "email") {
+      if (!form.email.trim())       return "Please enter your email.";
+      if (form.password.length < 6) return "Password must be at least 6 characters.";
+      if (form.password !== form.confirm) return "Passwords don't match.";
+    }
     return null;
   };
 
   const saveUser = async (firebaseUser, providerName) => {
     await setDoc(doc(db, "users", firebaseUser.uid), {
-      name:            form.name.trim(),
-      email:           firebaseUser.email.toLowerCase(),
-      reason:          form.reason.trim(),
-      status:          "pending",
-      created_at:      serverTimestamp(),
-      approved_at:     null,
-      approved_by:     null,
-      agreed_terms:    true,
-      agreed_data_use: form.agreeData,
-      agreed_paper:    true,
-      provider:        providerName,
+      name:                 form.name.trim(),
+      email:                firebaseUser.email.toLowerCase(),
+      reason:               form.reason.trim(),
+      status:               "pending",
+      created_at:           serverTimestamp(),
+      approved_at:          null,
+      approved_by:          null,
+      agreed_terms:         true,
+      agreed_terms_version: "v1.0",
+      agreed_terms_at:      serverTimestamp(),
+      provider:             providerName,
     });
   };
 
-  const handleEmailSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const err = validateCommon();
+    const err = validate();
     if (err) { setErrorMsg(err); return; }
-    if (!form.email.trim())        { setErrorMsg("Please enter your email."); return; }
-    if (form.password.length < 6)  { setErrorMsg("Password must be at least 6 characters."); return; }
-    if (form.password !== form.confirm) { setErrorMsg("Passwords don't match."); return; }
-
     setLoading(true);
     setErrorMsg(null);
+
     try {
-      const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
-      await saveUser(cred.user, "email");
-      await signOut(auth);
+      if (method === "email") {
+        const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
+        await saveUser(cred.user, "email");
+        await signOut(auth);
+      } else {
+        const cred = await signInWithPopup(auth, provider);
+        await saveUser(cred.user, "google");
+        await signOut(auth);
+      }
       setStep("pending");
     } catch (e) {
       setErrorMsg(friendlyError(e.code));
+      // Reset captcha on error
+      if (window.grecaptcha && widgetId.current !== null) {
+        window.grecaptcha.reset(widgetId.current);
+        setCaptchaToken(null);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleSubmit = async () => {
-    const err = validateCommon();
-    if (err) { setErrorMsg(err); return; }
-
-    setLoading(true);
-    setErrorMsg(null);
-    try {
-      const cred = await signInWithPopup(auth, provider);
-      await saveUser(cred.user, "google");
-      await signOut(auth);
-      setStep("pending");
-    } catch (e) {
-      setErrorMsg(friendlyError(e.code));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── Pending confirmation screen ───────────────────────────────────────────
+  // ── Pending screen ─────────────────────────────────────────────────────────
   if (step === "pending") {
     return (
       <div style={s.bg}>
@@ -106,9 +134,12 @@ export default function Signup({ onBackToLogin }) {
           <h2 style={{ fontSize:20, fontWeight:700, color:"#e6edf3", textAlign:"center", margin:"0 0 1rem" }}>
             Request Submitted!
           </h2>
+          <p style={{ fontSize:13, color:"#8b949e", lineHeight:1.6, textAlign:"center", marginBottom:"0.75rem" }}>
+            Thanks <strong style={{ color:"#e6edf3" }}>{form.name.split(" ")[0] || "there"}</strong>!
+            Your account request is under review.
+          </p>
           <p style={{ fontSize:13, color:"#8b949e", lineHeight:1.6, textAlign:"center", marginBottom:"1.5rem" }}>
-            Thanks <strong style={{ color:"#e6edf3" }}>{form.name.split(" ")[0]}</strong>!
-            Your account is pending approval. You'll be notified once admin reviews your request.
+            You'll receive an email once admin approves your access.
             This usually takes less than 24 hours.
           </p>
           <button style={s.btnSecondary} onClick={onBackToLogin}>Back to Sign In</button>
@@ -117,7 +148,7 @@ export default function Signup({ onBackToLogin }) {
     );
   }
 
-  // ── Method selector ───────────────────────────────────────────────────────
+  // ── Method selector ────────────────────────────────────────────────────────
   if (!method) {
     return (
       <div style={s.bg}>
@@ -127,10 +158,9 @@ export default function Signup({ onBackToLogin }) {
             <span style={s.logoSub}>Request Access</span>
           </div>
           <p style={{ fontSize:13, color:"#8b949e", textAlign:"center", marginBottom:"1.5rem", lineHeight:1.6 }}>
-            Choose how you'd like to sign up. You'll be asked a few questions before your request is reviewed.
+            Choose how you'd like to create your account.
           </p>
 
-          {/* Google option */}
           <button style={s.methodCard} onClick={() => setMethod("google")}>
             <svg width="22" height="22" viewBox="0 0 48 48">
               <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -151,7 +181,6 @@ export default function Signup({ onBackToLogin }) {
             <span style={s.dividerLine} />
           </div>
 
-          {/* Email option */}
           <button style={s.methodCard} onClick={() => setMethod("email")}>
             <span style={{ fontSize:22 }}>✉️</span>
             <div style={{ flex:1, textAlign:"left" }}>
@@ -161,7 +190,7 @@ export default function Signup({ onBackToLogin }) {
             <span style={{ color:"#8b949e" }}>→</span>
           </button>
 
-          <p style={{ ...s.footer, marginTop:"1.5rem" }}>
+          <p style={{ textAlign:"center", fontSize:12, color:"#8b949e", marginTop:"1.5rem" }}>
             Already have an account?{" "}
             <button style={s.linkBtn} onClick={onBackToLogin}>Sign In</button>
           </p>
@@ -170,10 +199,17 @@ export default function Signup({ onBackToLogin }) {
     );
   }
 
-  // ── Common fields shown for both methods ──────────────────────────────────
+  // ── Registration form ──────────────────────────────────────────────────────
   return (
     <div style={s.bg}>
-      <div style={{ ...s.card, maxWidth: 480 }}>
+      {showTerms && (
+        <TermsModal
+          onAccept={() => { setAgreedTerms(true); setShowTerms(false); }}
+          onClose={() => setShowTerms(false)}
+        />
+      )}
+
+      <div style={{ ...s.card, maxWidth:480 }}>
         <div style={s.logo}>
           <span style={s.logoText}>SignalBoard</span>
           <span style={s.logoSub}>
@@ -183,16 +219,16 @@ export default function Signup({ onBackToLogin }) {
 
         {errorMsg && <div style={s.error}>{errorMsg}</div>}
 
-        <form onSubmit={method === "email" ? handleEmailSubmit : e => { e.preventDefault(); handleGoogleSubmit(); }} style={s.form}>
+        <form onSubmit={handleSubmit} style={s.form}>
 
-          {/* Name — always */}
+          {/* Name */}
           <div style={s.fieldGroup}>
             <label style={s.label}>Full Name *</label>
             <input style={s.input} type="text" placeholder="Your full name"
               value={form.name} onChange={e => set("name", e.target.value)} required />
           </div>
 
-          {/* Email + Password — only for email method */}
+          {/* Email + Password (email method only) */}
           {method === "email" && <>
             <div style={s.fieldGroup}>
               <label style={s.label}>Email *</label>
@@ -213,28 +249,41 @@ export default function Signup({ onBackToLogin }) {
             </div>
           </>}
 
-          {/* Reason — always */}
+          {/* Reason */}
           <div style={s.fieldGroup}>
             <label style={s.label}>Why do you want access? *</label>
             <textarea style={{ ...s.input, height:80, resize:"vertical" }}
-              placeholder="Tell us a bit about yourself..."
+              placeholder="Tell us a bit about yourself and why you're interested..."
               value={form.reason} onChange={e => set("reason", e.target.value)} required />
           </div>
 
-          {/* Checkboxes — always */}
-          <div style={s.checkboxGroup}>
-            {[
-              { key:"notRobot",   label: "I am not a robot" },
-              { key:"agreeTerms", label: <>I agree to the <a href="#" style={s.link}>Terms of Use</a></> },
-              { key:"agreePaper", label: <>I understand SignalBoard uses <strong>paper trading only</strong> — no real money involved</> },
-              { key:"agreeData",  label: "I consent to my anonymous trading activity being used to improve signal accuracy. My personal data is stored securely via Google Firebase and never sold." },
-            ].map(({ key, label }) => (
-              <label key={key} style={s.checkboxRow}>
-                <input type="checkbox" checked={form[key]}
-                  onChange={e => set(key, e.target.checked)} />
-                <span>{label}</span>
-              </label>
-            ))}
+          {/* Terms agreement */}
+          <div style={s.termsRow}>
+            <div style={s.termsCheck}>
+              {agreedTerms ? (
+                <span style={{ color:"#3fb950", fontSize:18 }}>✓</span>
+              ) : (
+                <span style={{ color:"#8b949e", fontSize:18 }}>○</span>
+              )}
+            </div>
+            <div style={{ flex:1, fontSize:13, color:"#8b949e", lineHeight:1.5 }}>
+              I have read and agree to the{" "}
+              <button type="button" style={s.termsLink} onClick={() => setShowTerms(true)}>
+                Terms of Use & Privacy Policy
+              </button>
+              {agreedTerms && <span style={{ color:"#3fb950", marginLeft:6, fontSize:12 }}>✓ Agreed</span>}
+              {!agreedTerms && (
+                <button type="button" style={{ ...s.termsLink, marginLeft:8, fontSize:11, color:"#f0a000" }}
+                  onClick={() => setShowTerms(true)}>
+                  (click to read)
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* reCAPTCHA */}
+          <div style={{ display:"flex", justifyContent:"center", margin:"0.5rem 0" }}>
+            <div ref={captchaRef} />
           </div>
 
           <button style={s.btnPrimary} type="submit" disabled={loading}>
@@ -244,7 +293,7 @@ export default function Signup({ onBackToLogin }) {
 
         </form>
 
-        <p style={{ ...s.footer, marginTop:"1.25rem" }}>
+        <p style={{ textAlign:"center", fontSize:12, color:"#8b949e", marginTop:"1rem" }}>
           <button style={s.linkBtn} onClick={() => { setMethod(null); setErrorMsg(null); }}>
             ← Back
           </button>
@@ -267,25 +316,24 @@ function friendlyError(code) {
 }
 
 const s = {
-  bg:           { minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#0d1117", padding:"2rem 1rem" },
-  card:         { background:"#161b22", border:"1px solid #30363d", borderRadius:12, padding:"2rem", width:"100%" },
-  logo:         { textAlign:"center", marginBottom:"1.5rem" },
-  logoText:     { display:"block", fontSize:24, fontWeight:700, color:"#e6edf3", letterSpacing:"-0.5px" },
-  logoSub:      { display:"block", fontSize:12, color:"#8b949e", marginTop:4 },
-  error:        { background:"#3d1515", border:"1px solid #f85149", color:"#f85149", borderRadius:6, padding:"10px 14px", fontSize:13, marginBottom:"1rem" },
-  form:         { display:"flex", flexDirection:"column", gap:"1rem" },
-  fieldGroup:   { display:"flex", flexDirection:"column", gap:4 },
-  label:        { fontSize:12, color:"#8b949e", fontWeight:500 },
-  input:        { padding:"10px 12px", background:"#0d1117", border:"1px solid #30363d", borderRadius:6, color:"#e6edf3", fontSize:13, outline:"none", boxSizing:"border-box", width:"100%" },
-  checkboxGroup:{ display:"flex", flexDirection:"column", gap:10, padding:"4px 0" },
-  checkboxRow:  { display:"flex", alignItems:"flex-start", gap:8, fontSize:12, color:"#8b949e", cursor:"pointer", lineHeight:1.5 },
-  link:         { color:"#58a6ff", textDecoration:"none" },
-  linkBtn:      { background:"none", border:"none", color:"#58a6ff", cursor:"pointer", fontSize:12, padding:0 },
-  btnPrimary:   { padding:"11px", background:"#238636", border:"1px solid #2ea043", borderRadius:6, color:"#fff", fontSize:14, fontWeight:600, cursor:"pointer" },
-  btnSecondary: { width:"100%", padding:"10px", background:"transparent", border:"1px solid #30363d", borderRadius:6, color:"#e6edf3", fontSize:13, cursor:"pointer" },
-  divider:      { display:"flex", alignItems:"center", gap:8, margin:"1rem 0" },
-  dividerLine:  { flex:1, height:1, background:"#30363d" },
-  dividerText:  { fontSize:12, color:"#8b949e" },
-  methodCard:   { display:"flex", alignItems:"center", gap:12, width:"100%", padding:"14px 16px", background:"#0d1117", border:"1px solid #30363d", borderRadius:8, cursor:"pointer", textAlign:"left", transition:"border-color 0.15s" },
-  footer:       { textAlign:"center", fontSize:12, color:"#8b949e", marginBottom:0 },
+  bg:          { minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#0d1117", padding:"2rem 1rem" },
+  card:        { background:"#161b22", border:"1px solid #30363d", borderRadius:12, padding:"2rem", width:"100%" },
+  logo:        { textAlign:"center", marginBottom:"1.5rem" },
+  logoText:    { display:"block", fontSize:24, fontWeight:700, color:"#e6edf3", letterSpacing:"-0.5px" },
+  logoSub:     { display:"block", fontSize:12, color:"#8b949e", marginTop:4 },
+  error:       { background:"#3d1515", border:"1px solid #f85149", color:"#f85149", borderRadius:6, padding:"10px 14px", fontSize:13, marginBottom:"1rem" },
+  form:        { display:"flex", flexDirection:"column", gap:"1rem" },
+  fieldGroup:  { display:"flex", flexDirection:"column", gap:4 },
+  label:       { fontSize:12, color:"#8b949e", fontWeight:500 },
+  input:       { padding:"10px 12px", background:"#0d1117", border:"1px solid #30363d", borderRadius:6, color:"#e6edf3", fontSize:13, outline:"none", boxSizing:"border-box", width:"100%" },
+  termsRow:    { display:"flex", alignItems:"flex-start", gap:10, padding:"12px 14px", background:"#0d1117", border:"1px solid #30363d", borderRadius:6 },
+  termsCheck:  { flexShrink:0, marginTop:1 },
+  termsLink:   { background:"none", border:"none", color:"#58a6ff", cursor:"pointer", fontSize:13, padding:0, textDecoration:"underline" },
+  divider:     { display:"flex", alignItems:"center", gap:8, margin:"1rem 0" },
+  dividerLine: { flex:1, height:1, background:"#30363d" },
+  dividerText: { fontSize:12, color:"#8b949e" },
+  methodCard:  { display:"flex", alignItems:"center", gap:12, width:"100%", padding:"14px 16px", background:"#0d1117", border:"1px solid #30363d", borderRadius:8, cursor:"pointer", textAlign:"left" },
+  btnPrimary:  { padding:"11px", background:"#238636", border:"1px solid #2ea043", borderRadius:6, color:"#fff", fontSize:14, fontWeight:600, cursor:"pointer" },
+  btnSecondary:{ width:"100%", padding:"10px", background:"transparent", border:"1px solid #30363d", borderRadius:6, color:"#e6edf3", fontSize:13, cursor:"pointer" },
+  linkBtn:     { background:"none", border:"none", color:"#58a6ff", cursor:"pointer", fontSize:12, padding:0 },
 };
