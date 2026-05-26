@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuthContext } from "../App";
+import { auth } from "../lib/firebase";
 
 const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 
@@ -392,6 +393,7 @@ const linkCard    = { display:"flex", flexDirection:"column", gap:8, padding:"1r
 // And add: {activeTab === "pending" && <PendingUsers />}
 
 function PendingUsers() {
+  const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
   const [users,   setUsers]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg,     setMsg]     = useState(null);
@@ -415,27 +417,41 @@ function PendingUsers() {
   async function approve(uid, email, name) {
     if (!confirm(`Approve ${name} (${email})?`)) return;
     try {
-      const { doc, updateDoc, serverTimestamp } = await import("firebase/firestore");
-      await updateDoc(doc(db, "users", uid), {
-        status:      "approved",
-        approved_at: serverTimestamp(),
-        approved_by: adminUser.uid,
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch(`${API}/api/admin/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ uid, email, name }),
       });
-      setMsg({ type: "success", text: `${name} approved! Send them an email to let them know.` });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed");
+      setMsg({
+        type: "success",
+        text: data.email_sent
+          ? `✅ ${name} approved! Approval email sent to ${email}.`
+          : `✅ ${name} approved! (Email send failed — check Resend config)`,
+      });
       await loadPending();
     } catch (e) {
       setMsg({ type: "error", text: `Failed: ${e.message}` });
     }
   }
 
-  async function reject(uid, name) {
-    if (!confirm(`Reject and delete ${name}?`)) return;
+  async function reject(uid, email, name) {
+    if (!confirm(`Reject and delete ${name}? This cannot be undone.`)) return;
     try {
-      const { doc, deleteDoc } = await import("firebase/firestore");
-      await deleteDoc(doc(db, "users", uid));
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch(`${API}/api/admin/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ uid, email, name }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed");
+      setMsg({ type: "success", text: `${name} rejected.` });
       await loadPending();
     } catch (e) {
-      alert("Failed: " + e.message);
+      setMsg({ type: "error", text: `Failed: ${e.message}` });
     }
   }
 
@@ -494,7 +510,7 @@ function PendingUsers() {
                     >✓ Approve</button>
                     <button
                       style={{ padding:"5px 10px", background:"transparent", border:"1px solid #f8514960", borderRadius:4, color:"#f85149", fontSize:12, cursor:"pointer" }}
-                      onClick={() => reject(u.id, u.name)}
+                      onClick={() => reject(u.id, u.email, u.name)}
                     >✕ Reject</button>
                   </div>
                 </td>
