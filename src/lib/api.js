@@ -50,6 +50,9 @@ export const getSignals  = ()         => get("/api/signals");
 export const analyzeAll  = ()         => post("/api/signals/run-all");
 export const analyzeOne  = (symbol)   => get(`/api/signals/${symbol}`);
 
+// On-demand signal — Live Prices Signal tab only (24h cache, insider + sentiment)
+export const getOnDemandSignal = (symbol) => post("/api/ondemand/signal", { symbol });
+
 // ── Watchlist (protected — requires auth) ────────────────────────────────────
 export const getWatchlist    = ()       => get("/api/watchlist/");
 export const addToWatchlist  = (symbol) => post(`/api/watchlist/${symbol}`);

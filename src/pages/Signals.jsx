@@ -1,44 +1,73 @@
-// src/pages/Signals.jsx  —  Task #19 redesign
-// Props: { watchlist }  — same as original (App.jsx passes watchlist only)
-//
-// Changes vs original:
-//   ✓ Feed from GET /api/signals/feed  (paginated, Firestore-backed, infinite scroll)
-//   ✓ Filter bar: signal type × confidence
-//   ✓ On-demand Analyze for all users → POST /api/signals/analyze (cache-first, no double LLM calls)
-//   ✓ "Analyze All" button for admins only → POST /api/signals/run-all
-//   ✗ "Analyze All" hidden from regular users
-//   ✓ All CSS uses existing globals.css vars + classes
+// src/pages/Signals.jsx
+// Read-only signal feed — no analyze input, no Analyze All.
+// Signal generation moved to Live Prices → AI Signal tab.
+// Richer cards: price prediction chart, timeframe, insider summary, sentiment.
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useAuthContext } from "../App";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
-const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
+const API  = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
+const MONO = "'IBM Plex Mono', monospace";
 
 const SIG_COLOR = {
-  BUY:  { color: "var(--signal-buy)",  bg: "#0fffa315", border: "#0fffa350" },
-  HOLD: { color: "var(--signal-hold)", bg: "#ffd60015", border: "#ffd60050" },
-  SELL: { color: "var(--signal-sell)", bg: "#ff416215", border: "#ff416250" },
+  BUY:  { color: "#3fb950", bg: "#0d2a1a", border: "#1a6336" },
+  HOLD: { color: "#e3b341", bg: "#1a1206", border: "#6b4f06" },
+  SELL: { color: "#f85149", bg: "#2a0808", border: "#7a1a1a" },
 };
-const CONF_COLOR = { HIGH: "var(--green)", MEDIUM: "var(--amber)", LOW: "var(--red)" };
+const CONF_COLOR = { HIGH: "#3fb950", MEDIUM: "#e3b341", LOW: "#f85149" };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmt(n, d = 2)  { return n == null ? "—" : `$${Number(n).toFixed(d)}`; }
+function fmtPct(n)       { return n == null ? "—" : `${n >= 0 ? "+" : ""}${Number(n).toFixed(2)}%`; }
+
 function timeAgo(iso) {
   if (!iso) return null;
-  try {
-    const s = (Date.now() - new Date(iso).getTime()) / 1000;
-    if (s < 60)    return `${Math.floor(s)}s ago`;
-    if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
-    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  } catch { return null; }
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 60)    return `${Math.floor(s)}s ago`;
+  if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function fmt(n, d = 2) {
-  return n == null ? "—" : Number(n).toFixed(d);
+// ── Mini prediction sparkline inside card ─────────────────────────────────────
+function PredictionSparkline({ current, targets, signal }) {
+  if (!current || !targets) return null;
+  const data = [
+    { t: "Now", v: current },
+    targets.week1  && { t: "1W",  v: targets.week1  },
+    targets.month1 && { t: "1M",  v: targets.month1 },
+    targets.month3 && { t: "3M",  v: targets.month3 },
+  ].filter(Boolean);
+  if (data.length < 2) return null;
+
+  const color = SIG_COLOR[signal]?.color || "#58a6ff";
+  const min = Math.min(...data.map(d => d.v)) * 0.98;
+  const max = Math.max(...data.map(d => d.v)) * 1.02;
+
+  return (
+    <div style={{ height: 52, marginBottom: 10 }}>
+      <div style={{ fontFamily: MONO, fontSize: 7, color: "#6e7681", letterSpacing: 1, marginBottom: 3 }}>
+        PRICE PREDICTION
+      </div>
+      <ResponsiveContainer width="100%" height={40}>
+        <LineChart data={data} margin={{ top: 2, right: 4, bottom: 0, left: 0 }}>
+          <XAxis dataKey="t" tick={{ fontFamily: MONO, fontSize: 7, fill: "#6e7681" }} axisLine={false} tickLine={false} />
+          <YAxis domain={[min, max]} hide />
+          <Tooltip
+            contentStyle={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 4, fontFamily: MONO, fontSize: 9 }}
+            formatter={v => [`$${Number(v).toFixed(2)}`]}
+            labelStyle={{ color: "#8b949e" }}
+          />
+          <ReferenceLine y={current} stroke="#30363d" strokeDasharray="2 2" />
+          <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} dot={{ fill: color, r: 2, strokeWidth: 0 }} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
 }
 
 // ── Signal card ───────────────────────────────────────────────────────────────
 function SignalCard({ sig }) {
+  const [expanded, setExpanded] = useState(false);
   const type   = (sig.signal || "HOLD").toUpperCase();
   const conf   = (sig.confidence || "LOW").toUpperCase();
   const colors = SIG_COLOR[type] || SIG_COLOR.HOLD;
@@ -51,77 +80,148 @@ function SignalCard({ sig }) {
   return (
     <div className="card fade-in" style={{
       border: `1px solid ${colors.border}`,
-      boxShadow: `0 0 16px ${colors.color}10`,
+      boxShadow: `0 0 14px ${colors.color}10`,
       position: "relative", overflow: "hidden",
-    }}>
+      cursor: "pointer",
+    }}
+      onClick={() => setExpanded(e => !e)}
+    >
       {/* Top accent */}
       <div style={{
         position: "absolute", top: 0, left: 0, right: 0, height: 2,
         background: `linear-gradient(90deg,transparent,${colors.color}80,transparent)`,
       }} />
 
-      {/* Header */}
+      {/* Header row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
         <div>
-          <span className="mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--text1)" }}>
-            {sig.symbol}
-          </span>
-          {sig.price_at_signal != null && (
-            <div style={{ marginTop: 3 }}>
-              <span className="mono" style={{ fontSize: 12, color: "var(--text1)" }}>
-                ${fmt(sig.price_at_signal)}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+            <span style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: "#e6edf3" }}>
+              {sig.symbol}
+            </span>
+            <span style={{
+              fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: 1,
+              background: colors.bg, border: `1px solid ${colors.border}`,
+              borderRadius: 4, padding: "2px 8px", color: colors.color,
+            }}>{type}</span>
+            <span style={{ fontFamily: MONO, fontSize: 9, color: CONF_COLOR[conf] }}>{conf}</span>
+            {triggerBadge && (
+              <span style={{ fontFamily: MONO, fontSize: 8, color: "#6e7681", background: "#161b22", border: "1px solid #21262d", borderRadius: 4, padding: "1px 5px" }}>
+                {triggerBadge}
               </span>
+            )}
+          </div>
+          {sig.price_at_signal != null && (
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <span style={{ fontFamily: MONO, fontSize: 11, color: "#e6edf3" }}>
+                {fmt(sig.price_at_signal)}
+              </span>
+              {sig.target_price != null && (
+                <span style={{ fontFamily: MONO, fontSize: 10, color: "#8b949e" }}>
+                  → {fmt(sig.target_price)}
+                  {ret != null && (
+                    <span style={{ marginLeft: 5, color: ret >= 0 ? "#3fb950" : "#f85149" }}>
+                      {fmtPct(ret)}
+                    </span>
+                  )}
+                </span>
+              )}
+              {sig.stop_loss != null && (
+                <span style={{ fontFamily: MONO, fontSize: 9, color: "#f85149" }}>
+                  SL {fmt(sig.stop_loss)}
+                </span>
+              )}
             </div>
           )}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-          <div style={{
-            padding: "2px 9px", borderRadius: 5, fontSize: 10, fontWeight: 700,
-            fontFamily: "var(--mono)", letterSpacing: 1,
-            background: colors.bg, border: `1px solid ${colors.border}`, color: colors.color,
-          }}>
-            {type}
-          </div>
-          <span className="hint" style={{ color: CONF_COLOR[conf] }}>{conf}</span>
+
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+          <span style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681" }}>{timeAgo(sig.generated_at)}</span>
+          {sig.timeframe && (
+            <span style={{ fontFamily: MONO, fontSize: 8, color: "#58a6ff", background: "#58a6ff12", border: "1px solid #58a6ff33", borderRadius: 4, padding: "1px 6px" }}>
+              {sig.timeframe}
+            </span>
+          )}
+          <span style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681" }}>
+            {expanded ? "▲ less" : "▼ more"}
+          </span>
         </div>
       </div>
 
       {/* Summary */}
       {sig.summary && (
         <div style={{
-          fontSize: 11, color: "var(--text2)", lineHeight: 1.6, marginBottom: 8,
-          display: "-webkit-box", WebkitLineClamp: 2,
-          WebkitBoxOrient: "vertical", overflow: "hidden",
+          fontFamily: MONO, fontSize: 10, color: "#8b949e", lineHeight: 1.6,
+          marginBottom: expanded ? 12 : 0,
+          ...(!expanded ? {
+            display: "-webkit-box", WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical", overflow: "hidden",
+          } : {}),
         }}>
           {sig.summary}
         </div>
       )}
 
-      {/* Meta row */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-        {sig.target_price != null && (
-          <span className="hint">
-            Target: <span className="mono" style={{ color: "var(--text1)" }}>${fmt(sig.target_price)}</span>
-            {ret != null && (
-              <span style={{ marginLeft: 4, color: ret >= 0 ? "var(--green)" : "var(--red)" }}>
-                ({ret >= 0 ? "+" : ""}{fmt(ret)}%)
-              </span>
+      {/* Expanded detail */}
+      {expanded && (
+        <div style={{ borderTop: "1px solid #21262d", paddingTop: 12, marginTop: 4 }}>
+
+          {/* Sparkline */}
+          <PredictionSparkline
+            current={sig.price_at_signal}
+            targets={sig.price_targets}
+            signal={sig.signal}
+          />
+
+          {/* Key factors */}
+          {sig.key_factors?.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontFamily: MONO, fontSize: 7, color: "#6e7681", letterSpacing: 1, marginBottom: 5 }}>KEY FACTORS</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {sig.key_factors.map((f, i) => (
+                  <span key={i} style={{ fontFamily: MONO, fontSize: 8, background: "#161b22", border: "1px solid #21262d", borderRadius: 4, padding: "2px 7px", color: "#8b949e" }}>
+                    {f}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Insider + sentiment summaries */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+            {sig.insider_summary && (
+              <div style={{ background: "#161b22", borderRadius: 6, padding: "7px 10px", border: "1px solid #21262d" }}>
+                <div style={{ fontFamily: MONO, fontSize: 7, color: "#6e7681", letterSpacing: 1, marginBottom: 3 }}>INSIDERS</div>
+                <div style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e", lineHeight: 1.5 }}>{sig.insider_summary}</div>
+              </div>
             )}
-          </span>
-        )}
-        {sig.session_label && (
-          <span className="hint mono">{sig.session_label}</span>
-        )}
-        {triggerBadge && (
-          <span className="hint" style={{
-            background: "var(--bg3)", border: "1px solid var(--border)",
-            borderRadius: 4, padding: "1px 5px",
-          }}>
-            {triggerBadge}
-          </span>
-        )}
-        <span className="hint" style={{ marginLeft: "auto" }}>{timeAgo(sig.generated_at)}</span>
-      </div>
+            {sig.sentiment_summary && (
+              <div style={{ background: "#161b22", borderRadius: 6, padding: "7px 10px", border: "1px solid #21262d" }}>
+                <div style={{ fontFamily: MONO, fontSize: 7, color: "#6e7681", letterSpacing: 1, marginBottom: 3 }}>SENTIMENT</div>
+                <div style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e", lineHeight: 1.5 }}>{sig.sentiment_summary}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Bull / Bear */}
+          {(sig.bull_case || sig.bear_case) && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {sig.bull_case && (
+                <div style={{ background: "#0d2a1a", border: "1px solid #1a633633", borderRadius: 6, padding: "6px 9px" }}>
+                  <div style={{ fontFamily: MONO, fontSize: 7, color: "#3fb950", letterSpacing: 1, marginBottom: 3 }}>🐂 BULL</div>
+                  <div style={{ fontFamily: MONO, fontSize: 8, color: "#8b949e", lineHeight: 1.5 }}>{sig.bull_case}</div>
+                </div>
+              )}
+              {sig.bear_case && (
+                <div style={{ background: "#2a0808", border: "1px solid #7a1a1a33", borderRadius: 6, padding: "6px 9px" }}>
+                  <div style={{ fontFamily: MONO, fontSize: 7, color: "#f85149", letterSpacing: 1, marginBottom: 3 }}>🐻 BEAR</div>
+                  <div style={{ fontFamily: MONO, fontSize: 8, color: "#8b949e", lineHeight: 1.5 }}>{sig.bear_case}</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -130,9 +230,9 @@ function SignalCard({ sig }) {
 function SkeletonCard() {
   return (
     <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {[70, 100, 55].map((w, i) => (
+      {[60, 90, 75, 50].map((w, i) => (
         <div key={i} style={{
-          height: i === 0 ? 18 : 12, width: `${w}%`,
+          height: i === 0 ? 18 : 11, width: `${w}%`,
           background: "var(--bg3)", borderRadius: 4,
           animation: "pulse 1.5s ease-in-out infinite",
         }} />
@@ -155,116 +255,11 @@ function Pill({ label, active, onClick }) {
   );
 }
 
-// ── Analyze panel (all users) ─────────────────────────────────────────────────
-function AnalyzePanel({ onResult }) {
-  const [sym, setSym]   = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr]   = useState(null);
-
-  async function run() {
-    const s = sym.trim().toUpperCase();
-    if (!s || busy) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      const res = await fetch(`${API}/api/signals/analyze`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol: s }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      onResult(await res.json());
-      setSym("");
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="card" style={{ marginBottom: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-      <span className="hint mono" style={{ letterSpacing: 1 }}>ON-DEMAND ANALYZE</span>
-      <div style={{ display: "flex", gap: 8 }}>
-        <input
-          className="input"
-          value={sym}
-          onChange={e => setSym(e.target.value.toUpperCase())}
-          onKeyDown={e => e.key === "Enter" && run()}
-          placeholder="Any symbol — e.g. TSLA"
-          style={{ fontFamily: "var(--mono)", fontSize: 13 }}
-        />
-        <button
-          className="btn btn-primary"
-          onClick={run}
-          disabled={busy || !sym.trim()}
-          style={{ whiteSpace: "nowrap", minWidth: 110 }}
-        >
-          {busy ? "⟳ Analyzing…" : "⚡ Analyze"}
-        </button>
-      </div>
-      {err && <span style={{ fontSize: 11, color: "var(--red)" }}>{err}</span>}
-    </div>
-  );
-}
-
-// ── Admin: Analyze All panel ──────────────────────────────────────────────────
-function AnalyzeAllPanel({ onDone }) {
-  const [loading, setLoading] = useState(false);
-  const [lastRun, setLastRun] = useState(null);
-  const [err, setErr]         = useState(null);
-
-  async function run() {
-    if (loading) return;
-    setLoading(true);
-    setErr(null);
-    try {
-      const res = await fetch(`${API}/api/signals/run-all`, { method: "POST" });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      setLastRun(new Date());
-      onDone(data.signals || {});
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div className="card" style={{
-      marginBottom: 12, padding: "10px 16px",
-      border: "1px solid #388bfd40", background: "#388bfd08",
-      display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
-    }}>
-      <span className="hint" style={{ color: "var(--blue)" }}>⚙ Admin</span>
-      <span className="hint mono" style={{ flex: 1 }}>
-        Force-regenerate signals for all admin tickers
-      </span>
-      {lastRun && (
-        <span className="hint mono">Last run: {lastRun.toLocaleTimeString()}</span>
-      )}
-      {err && <span style={{ fontSize: 11, color: "var(--red)" }}>{err}</span>}
-      <button
-        className="btn btn-primary"
-        onClick={run}
-        disabled={loading}
-        style={{ minWidth: 140 }}
-      >
-        {loading ? "⟳ Analyzing…" : "⚡ Analyze All"}
-      </button>
-    </div>
-  );
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 const SIG_TYPES = ["ALL", "BUY", "HOLD", "SELL"];
 const CONFS     = ["ALL", "HIGH", "MEDIUM", "LOW"];
 
 export default function Signals({ watchlist = [] }) {
-  const auth = useAuthContext();                   // get isAdmin from context
-  const isAdmin = auth?.isAdmin ?? false;
-
   const [feed, setFeed]         = useState([]);
   const [loading, setLoading]   = useState(true);
   const [loadMore, setLoadMore] = useState(false);
@@ -319,20 +314,6 @@ export default function Signals({ watchlist = [] }) {
     return () => obs.disconnect();
   }, [hasMore, loadMore, loadFeed]);
 
-  // Prepend single result, deduplicated by symbol
-  function handleAnalyzeResult(sig) {
-    setFeed(prev => [sig, ...prev.filter(s => s.symbol !== sig.symbol)]);
-  }
-
-  // Admin: Analyze All replaces entire feed with fresh signals
-  function handleAnalyzeAll(signalsMap) {
-    const items = Object.entries(signalsMap).map(([sym, sig]) => ({ ...sig, symbol: sym }));
-    items.sort((a, b) => (b.generated_at || "").localeCompare(a.generated_at || ""));
-    setFeed(items);
-    setCursor(null);
-    setHasMore(false);
-  }
-
   const buys  = feed.filter(s => s.signal === "BUY").length;
   const holds = feed.filter(s => s.signal === "HOLD").length;
   const sells = feed.filter(s => s.signal === "SELL").length;
@@ -340,7 +321,7 @@ export default function Signals({ watchlist = [] }) {
 
   return (
     <div>
-      {/* Summary badges + mood bar */}
+      {/* Summary badges + mood */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
         {[["BUY", buys, "var(--signal-buy)"], ["HOLD", holds, "var(--signal-hold)"], ["SELL", sells, "var(--signal-sell)"]].map(([l, c, col]) => (
           <div key={l} style={{
@@ -360,21 +341,26 @@ export default function Signals({ watchlist = [] }) {
                 width: `${Math.max(8, (Math.max(buys, sells) / total) * 100)}%`,
               }} />
             </div>
-            <span className="mono" style={{
-              fontSize: 10, fontWeight: 700,
+            <span style={{
+              fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700,
               color: buys > sells ? "var(--signal-buy)" : sells > buys ? "var(--signal-sell)" : "var(--signal-hold)",
             }}>
               {buys > sells ? "BULLISH" : sells > buys ? "BEARISH" : "NEUTRAL"}
             </span>
           </div>
         )}
+
+        {/* Info banner — signal generation moved to Live Prices */}
+        <div style={{ marginLeft: "auto" }}>
+          <span style={{
+            fontFamily: "var(--mono)", fontSize: 9, color: "#6e7681",
+            background: "#161b22", border: "1px solid #21262d",
+            borderRadius: 6, padding: "3px 10px",
+          }}>
+            ⚡ Generate signals in Live Prices → AI Signal tab
+          </span>
+        </div>
       </div>
-
-      {/* Admin-only: Analyze All */}
-      {isAdmin && <AnalyzeAllPanel onDone={handleAnalyzeAll} />}
-
-      {/* All users: single symbol analyze */}
-      <AnalyzePanel onResult={handleAnalyzeResult} />
 
       {/* Filter bar */}
       <div className="card" style={{ padding: "10px 14px", marginBottom: 12, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
@@ -389,6 +375,9 @@ export default function Signals({ watchlist = [] }) {
         ))}
         <div style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
         <Pill label="👁 Watchlist" active={wlOnly} onClick={() => setWlOnly(v => !v)} />
+        <button onClick={() => loadFeed(true)} className="btn" style={{ marginLeft: "auto", fontSize: 11, padding: "3px 10px" }}>
+          ↻ Refresh
+        </button>
       </div>
 
       {/* Error */}
@@ -411,9 +400,12 @@ export default function Signals({ watchlist = [] }) {
       ) : feed.length === 0 ? (
         <div className="card" style={{ padding: 32, textAlign: "center" }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
-          <div style={{ color: "var(--text2)", marginBottom: 4 }}>No signals match your filters</div>
-          <div style={{ color: "var(--text3)", fontSize: 12 }}>
+          <div style={{ color: "var(--text2)", marginBottom: 4 }}>No signals yet</div>
+          <div style={{ color: "var(--text3)", fontSize: 12, marginBottom: 12 }}>
             Signals are generated automatically at scheduled times throughout the trading day
+          </div>
+          <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--blue)" }}>
+            To generate a signal now: Live Prices → select a ticker → AI Signal tab
           </div>
         </div>
       ) : (
@@ -425,13 +417,11 @@ export default function Signals({ watchlist = [] }) {
       )}
 
       <div ref={bottomRef} style={{ height: 1 }} />
-
       {loadMore && (
         <div style={{ textAlign: "center", padding: "16px 0", fontSize: 12, color: "var(--text3)", fontFamily: "var(--mono)" }}>
           Loading more…
         </div>
       )}
-
       {!hasMore && feed.length > 0 && (
         <div style={{
           textAlign: "center", padding: "20px 0",

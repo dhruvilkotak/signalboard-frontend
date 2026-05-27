@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import NewsTab from "../components/NewsTab";
 import SearchBar from "../components/SearchBar";
+import SignalTab from "../components/SignalTab";    // ← new
 
 const API    = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 const WS_URL = (import.meta.env.VITE_WS_URL || "wss://signalboard.duckdns.org")
@@ -25,7 +26,6 @@ const TV_MAP = {
 };
 const getTVSymbol = (sym) => TV_MAP[sym] || `NASDAQ:${sym}`;
 
-// TradingView URLs
 const tvChart     = (sym, iv="D", st="1") => `https://www.tradingview.com/widgetembed/?symbol=${encodeURIComponent(getTVSymbol(sym))}&interval=${iv}&symboledit=1&saveimage=1&toolbarbg=0d1117&studies=RSI%40tv-basicstudies%1FMACD%40tv-basicstudies%1FVolume%40tv-basicstudies&theme=dark&style=${st}&timezone=America%2FNew_York&withdateranges=1&showpopupbutton=1&hideideas=1&locale=en`;
 const tvTechnical = (sym) => `https://www.tradingview.com/embed-widget/technical-analysis/?symbol=${encodeURIComponent(getTVSymbol(sym))}&interval=1D&colorTheme=dark&isTransparent=true&locale=en&showIntervalTabs=true`;
 const tvNews      = (sym) => `https://www.tradingview.com/embed-widget/timeline/?feedMode=symbol&symbol=${encodeURIComponent(getTVSymbol(sym))}&colorTheme=dark&isTransparent=true&locale=en`;
@@ -34,9 +34,9 @@ const tvFinancials= (sym) => `https://www.tradingview.com/embed-widget/financial
 
 // ── Price hook ────────────────────────────────────────────────────────────────
 function usePrices(watchlist) {
-  const [prices, setPrices]     = useState({});
-  const [status, setStatus]     = useState("loading");
-  const [lastUpdate, setLU]     = useState(null);
+  const [prices, setPrices] = useState({});
+  const [status, setStatus] = useState("loading");
+  const [lastUpdate, setLU] = useState(null);
 
   const fetchAll = useCallback(async () => {
     if (!watchlist.length) return;
@@ -45,7 +45,8 @@ function usePrices(watchlist) {
       if (res.ok) {
         const data = await res.json();
         Object.values(data).forEach(p => {
-          if (p.ext_price && p.price) p.ext_change = ((p.ext_price - p.price) / p.price * 100).toFixed(2);
+          if (p.ext_price && p.price)
+            p.ext_change = ((p.ext_price - p.price) / p.price * 100).toFixed(2);
         });
         setPrices(prev => ({ ...prev, ...data }));
         setStatus("live");
@@ -150,12 +151,17 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
   const [chartStyle, setChartStyle] = useState("1");
   const [filter,     setFilter]     = useState("ALL");
 
-  // Keep selected valid
   useEffect(() => {
-    if (!watchlist.includes(selected) && watchlist.length > 0) {
+    if (!watchlist.includes(selected) && watchlist.length > 0)
       setSelected(watchlist[0]);
-    }
   }, [watchlist]);
+
+  // Reset to chart when switching symbols (don't keep signal tab stale)
+  const handleSelectSymbol = (sym) => {
+    setSelected(sym);
+    // Keep inner tab unless it's signal — signal is per-symbol so keep it
+    // so users can quickly compare signals across tickers
+  };
 
   const price = prices[selected];
   const chg   = price?.change_pct ?? 0;
@@ -170,8 +176,14 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
     return `$${(n/1e6).toFixed(0)}M`;
   };
 
-  // Filter watchlist by type (needs type info from search)
-  const filtered = filter === "ALL" ? watchlist : watchlist; // simplified — all for now
+  // ── Inner tabs definition — Signal tab added ───────────────────────────────
+  const INNER_TABS = [
+    { id: "chart",     icon: "📊", label: "Chart"      },
+    { id: "technical", icon: "⚡", label: "Technical"  },
+    { id: "signal",    icon: "🤖", label: "AI Signal"  },  // ← new
+    { id: "news",      icon: "📰", label: "News"       },
+    { id: "info",      icon: "ℹ️",  label: "Financials" },
+  ];
 
   return (
     <div style={{ height: "100vh", background: "#0d1117", color: "#e6edf3", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -190,7 +202,6 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
         padding: "0 12px", height: 44, flexShrink: 0,
         background: "#010409", borderBottom: "1px solid #21262d", gap: 8,
       }}>
-        {/* Logo + status */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, fontWeight: 700, color: "#e6edf3" }}>
             SIGNAL BOARD
@@ -207,10 +218,8 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
           </div>
         </div>
 
-        {/* Search bar */}
         <SearchBar watchlist={watchlist} onAdd={onAdd} />
 
-        {/* Tab nav */}
         <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
           {tabs?.map(t => (
             <button key={t.id} onClick={() => onNavigate(t.id)} style={{
@@ -227,7 +236,6 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
           ))}
         </div>
 
-        {/* Stats + refresh */}
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexShrink: 0 }}>
           {[["ADV", adv, "#3fb950"], ["DEC", dec, "#f85149"]].map(([l, v, c]) => (
             <div key={l} style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -253,7 +261,6 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
 
         {/* Left: watchlist */}
         <div style={{ width: 188, borderRight: "1px solid #21262d", display: "flex", flexDirection: "column", flexShrink: 0 }}>
-          {/* Filter tabs */}
           <div style={{ padding: "6px 8px", borderBottom: "1px solid #21262d", display: "flex", gap: 3 }}>
             {["ALL","STOCK","ETF"].map(f => (
               <button key={f} onClick={() => setFilter(f)} style={{
@@ -264,8 +271,6 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
               }}>{f}</button>
             ))}
           </div>
-
-          {/* Ticker list */}
           <div style={{ flex: 1, overflowY: "auto" }}>
             {watchlist.length === 0 ? (
               <div style={{ padding: 16, textAlign: "center", color: "#6e7681", fontSize: 11, fontFamily: "'IBM Plex Mono',monospace" }}>
@@ -274,13 +279,11 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
             ) : watchlist.map(sym => (
               <TickerRow key={sym} symbol={sym} price={prices[sym]}
                 selected={selected === sym}
-                onClick={() => { setSelected(sym); setInnerTab("chart"); }}
+                onClick={() => handleSelectSymbol(sym)}
                 onRemove={onRemove}
               />
             ))}
           </div>
-
-          {/* Footer */}
           <div style={{
             padding: "5px 10px", borderTop: "1px solid #21262d",
             fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, color: "#3a4258",
@@ -350,17 +353,12 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
             )}
           </div>
 
-          {/* Inner tabs + quick stats */}
+          {/* Inner tabs */}
           <div style={{
             display: "flex", borderBottom: "1px solid #21262d",
             background: "#0d1117", flexShrink: 0, alignItems: "center",
           }}>
-            {[
-              { id: "chart",     icon: "📊", label: "Chart" },
-              { id: "technical", icon: "⚡", label: "Technical" },
-              { id: "news",      icon: "📰", label: "News" },
-              { id: "info",      icon: "ℹ️",  label: "Financials" },
-            ].map(tab => (
+            {INNER_TABS.map(tab => (
               <button key={tab.id} onClick={() => setInnerTab(tab.id)} style={{
                 padding: "7px 14px", fontSize: 12,
                 fontFamily: "'IBM Plex Sans',sans-serif",
@@ -368,6 +366,15 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
                 borderBottom: innerTab === tab.id ? "2px solid #58a6ff" : "2px solid transparent",
                 fontWeight: innerTab === tab.id ? 600 : 400,
                 display: "flex", alignItems: "center", gap: 4,
+                // Highlight the Signal tab with a subtle glow
+                ...(tab.id === "signal" && innerTab !== "signal" ? {
+                  color: "#e3b341",
+                  borderBottom: "2px solid transparent",
+                } : {}),
+                ...(tab.id === "signal" && innerTab === "signal" ? {
+                  color: "#e3b341",
+                  borderBottom: "2px solid #e3b341",
+                } : {}),
               }}>
                 {tab.icon} {tab.label}
               </button>
@@ -398,24 +405,32 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
             <div style={{ display: innerTab === "technical" ? "block" : "none", height: "100%" }}>
               <iframe key={`tech-${selected}`} src={tvTechnical(selected)} width="100%" height="100%" />
             </div>
+            {/* ── Signal tab — always mounted so state persists per symbol ── */}
+            <div style={{ display: innerTab === "signal" ? "block" : "none", height: "100%" }}>
+              <SignalTab
+                key={selected}
+                symbol={selected}
+                currentPrice={price?.price}
+              />
+            </div>
             <div style={{ display: innerTab === "news"      ? "block" : "none", height: "100%" }}>
               <NewsTab symbol={selected} />
             </div>
             <div style={{ display: innerTab === "info" ? "flex" : "none", flexDirection: "column", height: "100%", overflowY: "auto" }}>
               <iframe key={`sinfo-${selected}`} src={tvSymInfo(selected)} width="100%" height="160" style={{ flexShrink: 0 }} />
-              <iframe key={`fin-${selected}`} src={tvFinancials(selected)} width="100%" height="480" style={{ flexShrink: 0 }} />
+              <iframe key={`fin-${selected}`}   src={tvFinancials(selected)} width="100%" height="480" style={{ flexShrink: 0 }} />
               {price && (
                 <div style={{ padding: 16 }}>
                   <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, color: "#6e7681", marginBottom: 10, letterSpacing: 1 }}>LIVE — YAHOO FINANCE</div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
                     {[
-                      ["Price", `$${price.price?.toFixed(2)}`],
-                      ["Change", `${chg>=0?"+":""}${chg?.toFixed(2)}%`],
-                      ["Open", `$${price.open?.toFixed(2)}`],
+                      ["Price",      `$${price.price?.toFixed(2)}`],
+                      ["Change",     `${chg>=0?"+":""}${chg?.toFixed(2)}%`],
+                      ["Open",       `$${price.open?.toFixed(2)}`],
                       ["Prev Close", `$${price.prev_close?.toFixed(2)}`],
-                      ["High", `$${price.high?.toFixed(2)}`],
-                      ["Low", `$${price.low?.toFixed(2)}`],
-                      ["Volume", price.volume ? `${(price.volume/1e6).toFixed(2)}M` : "—"],
+                      ["High",       `$${price.high?.toFixed(2)}`],
+                      ["Low",        `$${price.low?.toFixed(2)}`],
+                      ["Volume",     price.volume ? `${(price.volume/1e6).toFixed(2)}M` : "—"],
                       ["Market Cap", fmtCap(price.mkt_cap)],
                     ].map(([l, v]) => (
                       <div key={l} style={{ background: "#161b22", borderRadius: 8, padding: "8px 10px", border: "1px solid #21262d" }}>
