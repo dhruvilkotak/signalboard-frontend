@@ -114,9 +114,14 @@ function InsiderTable({ trades, summary }) {
                 </span>
                 <div>
                   <div style={{ fontFamily: MONO, fontSize: 9, color: "#e6edf3" }}>{t.name}</div>
-                  {t.role && t.role !== "Insider" && (
-                    <div style={{ fontFamily: MONO, fontSize: 7, color: "#6e7681" }}>{t.role}</div>
-                  )}
+                  <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                    {t.role && t.role !== "Insider" && (
+                      <span style={{ fontFamily: MONO, fontSize: 7, color: "#6e7681" }}>{t.role}</span>
+                    )}
+                    {t.is_10b5 && (
+                      <span style={{ fontFamily: MONO, fontSize: 7, color: "#6e7681", background: "#21262d", borderRadius: 3, padding: "0 4px" }}>10b5-1</span>
+                    )}
+                  </div>
                 </div>
                 <span style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e", textAlign: "right" }}>
                   {t.shares ? `${t.shares.toLocaleString()} sh` : "—"}
