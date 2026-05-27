@@ -1,5 +1,5 @@
 // src/pages/Signals.jsx
-// Read-only feed — BUY/SELL HIGH/MEDIUM signals only, <7 days fresh by default.
+// Read-only feed — BUY/SELL HIGH confidence signals only, <7 days fresh by default.
 // Rich cards: same detail as Live Prices AI Signal tab.
 // Admin: "🔍 Scan & Refresh" button triggers POST /api/signals/run-all.
 
@@ -16,7 +16,6 @@ const SIG_COLOR = {
   SELL: { color: "#f85149", bg: "#2a0808", border: "#7a1a1a" },
 };
 const CONF_COLOR = { HIGH: "#3fb950", MEDIUM: "#e3b341", LOW: "#f85149" };
-const RISK_COLOR = { LOW: "#3fb950", MEDIUM: "#e3b341", HIGH: "#f85149" };
 
 const INSIDER_COLOR = {
   Purchase: { color: "#3fb950", bg: "#0d2a1a", border: "#1a6336", icon: "▲" },
@@ -407,7 +406,7 @@ function AdminScanPanel({ onDone }) {
           <div style={{ fontSize: 12, color: "var(--text1)", marginBottom: 2 }}>Scan & Refresh Signals</div>
           <div style={{ fontFamily: MONO, fontSize: 9, color: "var(--text3)" }}>
             Force-regenerates signals using real RSI/MACD + SEC insider + StockTwits.
-            Only BUY/SELL with HIGH/MEDIUM confidence appear in the feed.
+            Only BUY/SELL with HIGH confidence appear in the feed.
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
@@ -423,7 +422,6 @@ function AdminScanPanel({ onDone }) {
           </button>
         </div>
       </div>
-
       {loading && (
         <div style={{ marginTop: 10, fontFamily: MONO, fontSize: 9, color: "var(--text3)" }}>
           Fetching price · technicals · SEC insider · StockTwits · calling Claude…
@@ -451,7 +449,6 @@ function AdminScanPanel({ onDone }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 const SIG_TYPES = ["ALL", "BUY", "SELL"];
-const CONFS     = ["ALL", "HIGH", "MEDIUM"];
 
 export default function Signals({ watchlist = [] }) {
   const auth    = useAuthContext();
@@ -465,7 +462,6 @@ export default function Signals({ watchlist = [] }) {
   const [err,      setErr]      = useState(null);
   const [showAll,  setShowAll]  = useState(false);
   const [sigType,  setSigType]  = useState(null);
-  const [conf,     setConf]     = useState(null);
 
   const bottomRef = useRef(null);
 
@@ -473,16 +469,15 @@ export default function Signals({ watchlist = [] }) {
     const p = new URLSearchParams({ limit: 20 });
     if (cur)     p.set("after", cur);
     if (sigType) p.set("signal_type", sigType);
-    if (conf)    p.set("confidence", conf);
     if (showAll) p.set("show_all", "true");
     return p.toString();
   }
 
   const loadFeed = useCallback(async (reset = false) => {
     const cur = reset ? null : cursor;
-  
+
     if (!reset && (!hasMore || loadMore || !cursor)) return;
-  
+
     if (reset) {
       setLoading(true);
       setCursor(null);
@@ -490,26 +485,25 @@ export default function Signals({ watchlist = [] }) {
     } else {
       setLoadMore(true);
     }
-  
+
     setErr(null);
-  
+
     try {
       const res = await fetch(`${API}/api/signals/feed?${buildQS(cur)}`);
       if (!res.ok) throw new Error(`${res.status}`);
-  
+
       const data = await res.json();
       const incoming = data.signals || [];
-  
+
       setFeed(prev => {
         if (reset) return incoming;
-  
         const seen = new Set(prev.map(s => `${s.symbol}-${s.generated_at}`));
         return [
           ...prev,
           ...incoming.filter(s => !seen.has(`${s.symbol}-${s.generated_at}`)),
         ];
       });
-  
+
       setCursor(data.next_cursor || null);
       setHasMore(Boolean(data.next_cursor));
     } catch (e) {
@@ -517,17 +511,15 @@ export default function Signals({ watchlist = [] }) {
     } finally {
       reset ? setLoading(false) : setLoadMore(false);
     }
-  }, [cursor, hasMore, loadMore, sigType, conf, showAll]);
+  }, [cursor, hasMore, loadMore, sigType, showAll]);
 
-  useEffect(() => { loadFeed(true); }, [sigType, conf, showAll]);
+  useEffect(() => { loadFeed(true); }, [sigType, showAll]);
 
   useEffect(() => {
     const el = bottomRef.current;
     if (!el) return;
     const obs = new IntersectionObserver(([e]) => {
-      if (e.isIntersecting && hasMore && cursor && !loadMore) {
-        loadFeed();
-      }
+      if (e.isIntersecting && hasMore && cursor && !loadMore) loadFeed();
     }, { threshold: 0.1 });
     obs.observe(el);
     return () => obs.disconnect();
@@ -578,16 +570,11 @@ export default function Signals({ watchlist = [] }) {
 
       {isAdmin && <AdminScanPanel onDone={handleScanDone} />}
 
-      {/* Filter bar */}
+      {/* Filter bar — signal type + date range only (CONF removed, feed is HIGH only) */}
       <div className="card" style={{ padding: "10px 14px", marginBottom: 12, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         <span className="hint mono" style={{ letterSpacing: 1, marginRight: 2 }}>SIGNAL</span>
         {SIG_TYPES.map(t => (
           <Pill key={t} label={t} active={sigType === (t === "ALL" ? null : t)} onClick={() => setSigType(t === "ALL" ? null : t)} />
-        ))}
-        <div style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
-        <span className="hint mono" style={{ letterSpacing: 1, marginRight: 2 }}>CONF</span>
-        {CONFS.map(c => (
-          <Pill key={c} label={c} active={conf === (c === "ALL" ? null : c)} onClick={() => setConf(c === "ALL" ? null : c)} />
         ))}
         <div style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
         <Pill
@@ -618,7 +605,7 @@ export default function Signals({ watchlist = [] }) {
             No high-conviction signals yet
           </div>
           <div style={{ color: "var(--text3)", fontSize: 12, marginBottom: 12, lineHeight: 1.6 }}>
-            Only BUY/SELL signals with HIGH or MEDIUM confidence appear here.
+            Only BUY/SELL signals with HIGH confidence appear here.
             <br />Signals are generated automatically during market hours.
           </div>
           {isAdmin ? (
