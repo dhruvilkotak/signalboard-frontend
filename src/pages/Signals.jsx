@@ -193,6 +193,10 @@ function SignalCard({ sig }) {
     sig.trigger === "price_spike" ? "⚡ spike" :
     sig.trigger === "on_demand"   ? "🔍 manual" : null;
 
+  const changedBadge = sig.signal_changed
+    ? `was ${type} · now ${sig.current_signal || "UNKNOWN"}`
+    : null;
+
   return (
     <div className="card fade-in" style={{
       border: `1px solid ${colors.border}`,
@@ -229,6 +233,19 @@ function SignalCard({ sig }) {
             {triggerBadge && (
               <span style={{ fontFamily: MONO, fontSize: 8, color: "#6e7681", background: "#161b22", border: "1px solid #21262d", borderRadius: 4, padding: "1px 5px" }}>
                 {triggerBadge}
+              </span>
+            )}
+            {changedBadge && (
+              <span style={{
+                fontFamily: MONO,
+                fontSize: 8,
+                color: "#e3b341",
+                background: "#1a1206",
+                border: "1px solid #6b4f06",
+                borderRadius: 4,
+                padding: "1px 5px",
+              }}>
+                ⚠ {changedBadge}
               </span>
             )}
           </div>
