@@ -49,6 +49,7 @@ export const getBatch    = (symbols)  => get(`/api/quote/batch/${symbols.join(",
 export const getSignals  = ()         => get("/api/signals");
 export const analyzeAll  = ()         => post("/api/signals/run-all");
 export const analyzeOne  = (symbol)   => get(`/api/signals/${symbol}`);
+export const deleteSignalSnapshot = (snapshotId) => del(`/api/signals/snapshot/${snapshotId}`);
 
 // Expose token getter for direct use in components that need raw auth headers
 export const getToken = () => _getToken();

@@ -10,6 +10,7 @@ import InsiderActivity from "../components/signal/InsiderActivity";
 import SentimentBar from "../components/signal/SentimentBar";
 import KeyFactors from "../components/signal/KeyFactors";
 import BullBearCase from "../components/signal/BullBearCase";
+import { deleteSignalSnapshot } from "../lib/api";
 
 const API  = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 const MONO = "'IBM Plex Mono', monospace";
@@ -21,20 +22,8 @@ const SIG_COLOR = {
 };
 const CONF_COLOR = { HIGH: "#3fb950", MEDIUM: "#e3b341", LOW: "#f85149" };
 
-const INSIDER_COLOR = {
-  Purchase: { color: "#3fb950", bg: "#0d2a1a", border: "#1a6336", icon: "▲" },
-  Sale:     { color: "#f85149", bg: "#2a0808", border: "#7a1a1a", icon: "▼" },
-  Award:    { color: "#58a6ff", bg: "#0d1a2a", border: "#1a3a6e", icon: "◆" },
-};
-
 function fmt(n, d = 2)  { return n == null ? "—" : `$${Number(n).toFixed(d)}`; }
 function fmtPct(n)       { return n == null ? "—" : `${n >= 0 ? "+" : ""}${Number(n).toFixed(2)}%`; }
-function fmtNum(n)       {
-  if (!n) return "—";
-  if (n >= 1e6) return `$${(n/1e6).toFixed(2)}M`;
-  if (n >= 1e3) return `$${(n/1e3).toFixed(0)}K`;
-  return `$${n}`;
-}
 
 function timeAgo(iso) {
   if (!iso) return null;
@@ -90,8 +79,9 @@ function PredictionSparkline({ current, targets, signal }) {
 }
 
 // ── Signal card ───────────────────────────────────────────────────────────────
-function SignalCard({ sig }) {
+function SignalCard({ sig, isAdmin, onDelete }) {
   const [expanded, setExpanded] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const type   = (sig.signal || "HOLD").toUpperCase();
   const conf   = (sig.confidence || "LOW").toUpperCase();
   const colors = SIG_COLOR[type] || SIG_COLOR.HOLD;
@@ -105,6 +95,31 @@ function SignalCard({ sig }) {
   const changedBadge = sig.signal_changed
     ? `was ${type} · now ${sig.current_signal || "UNKNOWN"}`
     : null;
+    async function handleDelete(e) {
+      e.stopPropagation();
+    
+      if (!sig.snapshot_doc_id) {
+        alert("Missing snapshot_doc_id. Cannot delete this feed item.");
+        return;
+      }
+    
+      const ok = window.confirm(`Delete this signal snapshot for ${sig.symbol}?`);
+      if (!ok) return;
+    
+      try {
+        setDeleting(true);
+    
+        await deleteSignalSnapshot(sig.snapshot_doc_id);
+    
+        if (onDelete) {
+          onDelete(sig);
+        }
+      } catch (e) {
+        alert(e.message);
+      } finally {
+        setDeleting(false);
+      }
+    }
 
   return (
     <div className="card fade-in" style={{
@@ -180,9 +195,35 @@ function SignalCard({ sig }) {
             )}
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
-          <span style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681" }}>{timeAgo(sig.generated_at)}</span>
-          <span style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681" }}>{expanded ? "▲" : "▼"}</span>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+          <span style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681" }}>
+            {timeAgo(sig.generated_at)}
+          </span>
+
+          {isAdmin && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              title="Delete signal"
+              style={{
+                background: "#2a0808",
+                border: "1px solid #7a1a1a",
+                color: "#f85149",
+                borderRadius: 4,
+                padding: "2px 6px",
+                fontSize: 9,
+                fontFamily: MONO,
+                cursor: deleting ? "not-allowed" : "pointer",
+                opacity: deleting ? 0.6 : 1,
+              }}
+            >
+              {deleting ? "..." : "✕"}
+            </button>
+          )}
+
+          <span style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681" }}>
+            {expanded ? "▲" : "▼"}
+          </span>
         </div>
       </div>
 
@@ -523,7 +564,16 @@ export default function Signals({ watchlist = [] }) {
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
           {feed.map((sig, i) => (
-            <SignalCard key={`${sig.symbol}-${sig.generated_at ?? i}`} sig={sig} />
+            <SignalCard
+              key={`${sig.symbol}-${sig.generated_at ?? i}`}
+              sig={sig}
+              isAdmin={isAdmin}
+              onDelete={(deletedSig) => {
+                setFeed(prev =>
+                  prev.filter(s => s.snapshot_doc_id !== deletedSig.snapshot_doc_id)
+                );
+              }}
+            />
           ))}
         </div>
       )}
