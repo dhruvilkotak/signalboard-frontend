@@ -50,6 +50,9 @@ export const getSignals  = ()         => get("/api/signals");
 export const analyzeAll  = ()         => post("/api/signals/run-all");
 export const analyzeOne  = (symbol)   => get(`/api/signals/${symbol}`);
 
+// Expose token getter for direct use in components that need raw auth headers
+export const getToken = () => _getToken();
+
 // On-demand signal — Live Prices Signal tab only (24h cache, insider + sentiment)
 export const getOnDemandSignal = (symbol) => post("/api/ondemand/signal", { symbol });
 
