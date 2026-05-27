@@ -1,12 +1,12 @@
 // src/components/SignalTab.jsx
-// Renders inside LiveDashboard as the "⚡ Signal" inner tab.
-// Calls POST /api/ondemand/signal — 24h cached, includes insider + sentiment.
-// Uses Recharts for price prediction chart.
+// Auto-loads signal on mount (300ms debounce).
+// Shared cache: signals_ondemand/{symbol} — one Claude call per ticker per 24h across ALL users.
+// No buttons. Tab click = intent. Cache hit = instant. Cache miss = auto-generate.
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip,
-  ReferenceLine, ResponsiveContainer, Area, AreaChart,
+  AreaChart, Area, LineChart, Line,
+  XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer,
 } from "recharts";
 import { getOnDemandSignal } from "../lib/api";
 
@@ -20,31 +20,44 @@ const SIG_COLOR = {
 const CONF_COLOR = { HIGH: "#3fb950", MEDIUM: "#e3b341", LOW: "#f85149" };
 const RISK_COLOR = { LOW: "#3fb950", MEDIUM: "#e3b341", HIGH: "#f85149" };
 
-function fmt(n, d = 2) { return n == null ? "—" : `$${Number(n).toFixed(d)}`; }
-function fmtPct(n)     { return n == null ? "—" : `${n >= 0 ? "+" : ""}${Number(n).toFixed(2)}%`; }
+function fmt(n, d = 2)  { return n == null ? "—" : `$${Number(n).toFixed(d)}`; }
+function fmtPct(n)       { return n == null ? "—" : `${n >= 0 ? "+" : ""}${Number(n).toFixed(2)}%`; }
 
-function timeAgo(iso) {
-  if (!iso) return null;
-  const s = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (s < 60)    return `${Math.floor(s)}s ago`;
-  if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+function cacheStatus(signal) {
+  if (!signal?.generated_at || !signal?.expires_at) return null;
+  try {
+    const gen     = new Date(signal.generated_at);
+    const exp     = new Date(signal.expires_at);
+    const nowMs   = Date.now();
+    const ageMs   = nowMs - gen.getTime();
+    const leftMs  = exp.getTime() - nowMs;
+
+    const ageStr  = ageMs < 3600000
+      ? `${Math.floor(ageMs / 60000)}m ago`
+      : `${Math.floor(ageMs / 3600000)}h ago`;
+
+    const leftStr = leftMs <= 0
+      ? "expired"
+      : leftMs < 3600000
+      ? `${Math.floor(leftMs / 60000)}m`
+      : `${Math.floor(leftMs / 3600000)}h`;
+
+    return { ageStr, leftStr, expired: leftMs <= 0 };
+  } catch { return null; }
 }
 
 // ── Price prediction chart ────────────────────────────────────────────────────
 function PredictionChart({ current, targets, signal }) {
   if (!current || !targets || Object.keys(targets).length === 0) return null;
-
   const sigColor = SIG_COLOR[signal]?.color || "#58a6ff";
 
   const data = [
-    { label: "Now",    price: current,           day: 0   },
-    { label: "1W",     price: targets.week1,      day: 7   },
-    { label: "2W",     price: targets.week2,      day: 14  },
-    { label: "1M",     price: targets.month1,     day: 30  },
-    { label: "3M",     price: targets.month3,     day: 90  },
-  ].filter(d => d.price != null && d.price > 0);
+    { label: "Now", price: current },
+    targets.week1  ? { label: "1W",  price: targets.week1  } : null,
+    targets.week2  ? { label: "2W",  price: targets.week2  } : null,
+    targets.month1 ? { label: "1M",  price: targets.month1 } : null,
+    targets.month3 ? { label: "3M",  price: targets.month3 } : null,
+  ].filter(Boolean);
 
   if (data.length < 2) return null;
 
@@ -64,28 +77,15 @@ function PredictionChart({ current, targets, signal }) {
               <stop offset="95%" stopColor={sigColor} stopOpacity={0.02} />
             </linearGradient>
           </defs>
-          <XAxis
-            dataKey="label"
-            tick={{ fontFamily: MONO, fontSize: 8, fill: "#6e7681" }}
-            axisLine={false} tickLine={false}
-          />
-          <YAxis
-            domain={[min, max]}
-            tick={{ fontFamily: MONO, fontSize: 8, fill: "#6e7681" }}
-            axisLine={false} tickLine={false}
-            tickFormatter={v => `$${v.toFixed(0)}`}
-            width={45}
-          />
+          <XAxis dataKey="label" tick={{ fontFamily: MONO, fontSize: 8, fill: "#6e7681" }} axisLine={false} tickLine={false} />
+          <YAxis domain={[min, max]} tick={{ fontFamily: MONO, fontSize: 8, fill: "#6e7681" }} axisLine={false} tickLine={false} tickFormatter={v => `$${v.toFixed(0)}`} width={45} />
           <Tooltip
             contentStyle={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 6, fontFamily: MONO, fontSize: 10 }}
             formatter={v => [`$${Number(v).toFixed(2)}`, "Target"]}
             labelStyle={{ color: "#8b949e" }}
           />
           <ReferenceLine y={current} stroke="#30363d" strokeDasharray="3 3" />
-          <Area
-            type="monotone" dataKey="price"
-            stroke={sigColor} strokeWidth={2}
-            fill="url(#predGrad)"
+          <Area type="monotone" dataKey="price" stroke={sigColor} strokeWidth={2} fill="url(#predGrad)"
             dot={{ fill: sigColor, r: 3, strokeWidth: 0 }}
             activeDot={{ r: 5, fill: sigColor }}
           />
@@ -97,10 +97,9 @@ function PredictionChart({ current, targets, signal }) {
 
 // ── Sentiment bar ─────────────────────────────────────────────────────────────
 function SentimentBar({ sentiment }) {
-  if (!sentiment || !sentiment.sentiment_label) return null;
+  if (!sentiment?.sentiment_label) return null;
   const bull = sentiment.bullish_pct || 50;
   const bear = sentiment.bearish_pct || 50;
-
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
@@ -120,9 +119,7 @@ function SentimentBar({ sentiment }) {
         <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700,
           color: sentiment.sentiment_label === "Bullish" ? "#3fb950"
                : sentiment.sentiment_label === "Bearish" ? "#f85149" : "#e3b341"
-        }}>
-          {sentiment.sentiment_label}
-        </span>
+        }}>{sentiment.sentiment_label}</span>
         <span style={{ fontFamily: MONO, fontSize: 9, color: "#f85149" }}>{bear}% Bearish ▼</span>
       </div>
     </div>
@@ -136,7 +133,7 @@ function InsiderActivity({ trades, summary }) {
       <div style={{ fontFamily: MONO, fontSize: 8, color: "#6e7681", letterSpacing: 1, marginBottom: 6 }}>
         SEC INSIDER ACTIVITY (FORM 4 — LAST 90 DAYS)
       </div>
-      {trades && trades.length > 0 ? (
+      {trades?.length > 0 ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {trades.map((t, i) => (
             <div key={i} style={{
@@ -150,8 +147,8 @@ function InsiderActivity({ trades, summary }) {
           ))}
         </div>
       ) : (
-        <div style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681", padding: "5px 0" }}>
-          No insider filings found in the last 90 days
+        <div style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681", padding: "4px 0" }}>
+          No insider filings in last 90 days
         </div>
       )}
       {summary && (
@@ -163,235 +160,236 @@ function InsiderActivity({ trades, summary }) {
   );
 }
 
+// ── Loading skeleton ──────────────────────────────────────────────────────────
+function Skeleton({ symbol }) {
+  return (
+    <div style={{ padding: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+        <div style={{
+          width: 8, height: 8, borderRadius: "50%", background: "#e3b341",
+          animation: "blink 1s ease-in-out infinite",
+        }} />
+        <span style={{ fontFamily: MONO, fontSize: 10, color: "#6e7681" }}>
+          Generating AI signal for {symbol}…
+        </span>
+      </div>
+      {[200, 130, 80, 80, 60].map((h, i) => (
+        <div key={i} style={{
+          height: h, background: "#161b22", borderRadius: 8,
+          marginBottom: 12, animation: "shimmer 1.5s ease-in-out infinite",
+          animationDelay: `${i * 0.1}s`,
+        }} />
+      ))}
+      <div style={{ fontFamily: MONO, fontSize: 8, color: "#3a4258", marginTop: 8 }}>
+        Fetching price · SEC insider data · StockTwits sentiment…
+      </div>
+    </div>
+  );
+}
+
 // ── Main SignalTab ────────────────────────────────────────────────────────────
 export default function SignalTab({ symbol, currentPrice }) {
   const [signal,  setSignal]  = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);   // start true — auto-loads on mount
   const [error,   setError]   = useState(null);
+  const debounceRef = useRef(null);
 
-  async function generate() {
-    if (loading) return;
-    setLoading(true);
+  // Auto-load on mount and when symbol changes — 300ms debounce
+  useEffect(() => {
+    setSignal(null);
     setError(null);
-    try {
-      const data = await getOnDemandSignal(symbol);
-      setSignal(data);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }
+    setLoading(true);
+
+    // Clear any pending debounce from rapid ticker switching
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const data = await getOnDemandSignal(symbol);
+        setSignal(data);
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [symbol]);
 
   const colors = signal ? (SIG_COLOR[signal.signal] || SIG_COLOR.HOLD) : null;
+  const cache  = signal ? cacheStatus(signal) : null;
 
+  // ── Loading state ──────────────────────────────────────────────────────────
+  if (loading) return <Skeleton symbol={symbol} />;
+
+  // ── Error state ────────────────────────────────────────────────────────────
+  if (error) {
+    return (
+      <div style={{ padding: 20 }}>
+        <div style={{
+          background: "#2a0808", border: "1px solid #7a1a1a",
+          borderRadius: 10, padding: "16px 20px",
+          fontFamily: MONO, fontSize: 11, color: "#f85149",
+        }}>
+          Failed to load signal: {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (!signal) return null;
+
+  // ── Signal result ──────────────────────────────────────────────────────────
   return (
-    <div style={{
-      height: "100%", overflowY: "auto", padding: 20,
-      background: "#0d1117",
-    }}>
+    <div style={{ height: "100%", overflowY: "auto", padding: 20, background: "#0d1117" }}>
 
-      {/* Generate button — always visible */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        <button
-          onClick={generate}
-          disabled={loading}
-          style={{
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "8px 20px", borderRadius: 8,
-            background: loading ? "#161b22" : "linear-gradient(135deg,#1f6feb,#388bfd)",
-            border: "1px solid #1f6feb",
-            color: "#fff", fontFamily: MONO, fontSize: 11, fontWeight: 700,
-            cursor: loading ? "not-allowed" : "pointer",
-            transition: "all 0.15s",
-          }}
-        >
-          {loading ? "⟳ Generating signal…" : signal ? "↻ Refresh Signal" : "⚡ Generate Signal"}
-        </button>
-        {signal && (
-          <span style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681" }}>
-            {signal.source === "ondemand" ? "Fresh" : "Cached"} · {timeAgo(signal.generated_at)}
-            {" · Valid for "}
-            {signal.expires_at
-              ? `${Math.max(0, Math.floor((new Date(signal.expires_at) - Date.now()) / 3600000))}h`
-              : "24h"}
-          </span>
-        )}
-        {error && <span style={{ fontFamily: MONO, fontSize: 9, color: "#f85149" }}>{error}</span>}
+      {/* ── Cache status bar ── */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        marginBottom: 16, padding: "5px 10px",
+        background: "#161b22", borderRadius: 6, border: "1px solid #21262d",
+      }}>
+        <div style={{
+          width: 6, height: 6, borderRadius: "50%",
+          background: cache?.expired ? "#f85149" : "#3fb950",
+        }} />
+        <span style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e" }}>
+          Signal generated {cache?.ageStr} · shared across all users
+        </span>
+        <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: 9,
+          color: cache?.expired ? "#f85149" : "#6e7681",
+        }}>
+          {cache?.expired ? "expired — refreshing next visit" : `valid for ${cache?.leftStr}`}
+        </span>
       </div>
 
-      {/* No signal yet */}
-      {!signal && !loading && (
-        <div style={{
-          background: "#161b22", border: "1px solid #21262d",
-          borderRadius: 12, padding: "32px 24px", textAlign: "center",
-        }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>⚡</div>
-          <div style={{ fontFamily: MONO, fontSize: 12, color: "#8b949e", marginBottom: 4 }}>
-            Get AI signal for {symbol}
+      {/* ── Signal header card ── */}
+      <div style={{
+        background: colors.bg, border: `1px solid ${colors.border}`,
+        borderRadius: 12, padding: "16px 20px", marginBottom: 14,
+        boxShadow: `0 0 24px ${colors.color}18`,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+
+          {/* Signal + confidence + summary */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, marginRight: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontFamily: MONO, fontSize: 28, fontWeight: 700, color: colors.color, letterSpacing: 2 }}>
+                {signal.signal}
+              </span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <span style={{
+                  fontFamily: MONO, fontSize: 9, fontWeight: 700,
+                  color: CONF_COLOR[signal.confidence],
+                  background: `${CONF_COLOR[signal.confidence]}18`,
+                  border: `1px solid ${CONF_COLOR[signal.confidence]}44`,
+                  borderRadius: 4, padding: "2px 7px",
+                }}>
+                  {signal.confidence} CONFIDENCE
+                </span>
+                <span style={{ fontFamily: MONO, fontSize: 9, color: RISK_COLOR[signal.risk], paddingLeft: 2 }}>
+                  {signal.risk} RISK
+                </span>
+              </div>
+            </div>
+            <div style={{ fontFamily: MONO, fontSize: 11, color: "#8b949e", lineHeight: 1.6 }}>
+              {signal.summary}
+            </div>
           </div>
-          <div style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681", lineHeight: 1.6 }}>
-            Includes price prediction · SEC insider activity · StockTwits sentiment
-            <br />Cached 24h — one Claude call per ticker per day
-          </div>
-        </div>
-      )}
 
-      {/* Loading skeleton */}
-      {loading && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {[180, 120, 80, 80].map((h, i) => (
-            <div key={i} style={{
-              height: h, background: "#161b22", borderRadius: 8,
-              animation: "shimmer 1.5s ease-in-out infinite",
-            }} />
-          ))}
-        </div>
-      )}
-
-      {/* Signal result */}
-      {signal && !loading && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-
-          {/* ── Signal header card ── */}
+          {/* Price targets column */}
           <div style={{
-            background: colors.bg,
-            border: `1px solid ${colors.border}`,
-            borderRadius: 12, padding: "16px 20px",
-            marginBottom: 14,
-            boxShadow: `0 0 24px ${colors.color}18`,
+            display: "flex", flexDirection: "column", gap: 6,
+            background: "#0d1117", borderRadius: 8, padding: "10px 14px",
+            border: "1px solid #21262d", minWidth: 160, flexShrink: 0,
           }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-              {/* Signal + confidence */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{
-                    fontFamily: MONO, fontSize: 28, fontWeight: 700,
-                    color: colors.color, letterSpacing: 2,
-                  }}>
-                    {signal.signal}
-                  </span>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <span style={{
-                      fontFamily: MONO, fontSize: 9, fontWeight: 700,
-                      color: CONF_COLOR[signal.confidence],
-                      background: `${CONF_COLOR[signal.confidence]}18`,
-                      border: `1px solid ${CONF_COLOR[signal.confidence]}44`,
-                      borderRadius: 4, padding: "2px 7px",
-                    }}>
-                      {signal.confidence} CONFIDENCE
-                    </span>
-                    <span style={{
-                      fontFamily: MONO, fontSize: 9,
-                      color: RISK_COLOR[signal.risk],
-                      paddingLeft: 2,
-                    }}>
-                      {signal.risk} RISK
-                    </span>
-                  </div>
-                </div>
-                <div style={{ fontFamily: MONO, fontSize: 11, color: "#8b949e", lineHeight: 1.6, maxWidth: 480 }}>
-                  {signal.summary}
-                </div>
-              </div>
-
-              {/* Price targets column */}
-              <div style={{
-                display: "flex", flexDirection: "column", gap: 6,
-                background: "#0d1117", borderRadius: 8, padding: "10px 14px",
-                border: "1px solid #21262d", minWidth: 160,
-              }}>
-                {[
-                  ["Current",  currentPrice || signal.price_at_signal, null],
-                  ["Target",   signal.target_price, signal.expected_return_pct],
-                  ["Stop Loss",signal.stop_loss, null],
-                ].map(([label, val, pct]) => (
-                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                    <span style={{ fontFamily: MONO, fontSize: 8, color: "#6e7681" }}>{label.toUpperCase()}</span>
-                    <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-                      <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: "#e6edf3" }}>
-                        {fmt(val)}
-                      </span>
-                      {pct != null && (
-                        <span style={{ fontFamily: MONO, fontSize: 9, color: pct >= 0 ? "#3fb950" : "#f85149" }}>
-                          {fmtPct(pct)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                <div style={{ borderTop: "1px solid #21262d", paddingTop: 6, marginTop: 2 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ fontFamily: MONO, fontSize: 8, color: "#6e7681" }}>TIMEFRAME</span>
-                    <span style={{ fontFamily: MONO, fontSize: 9, color: "#58a6ff" }}>{signal.timeframe}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Price prediction chart ── */}
-          <PredictionChart
-            current={currentPrice || signal.price_at_signal}
-            targets={signal.price_targets}
-            signal={signal.signal}
-          />
-
-          {/* ── Key factors ── */}
-          {signal.key_factors?.length > 0 && (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontFamily: MONO, fontSize: 8, color: "#6e7681", letterSpacing: 1, marginBottom: 8 }}>
-                KEY FACTORS
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {signal.key_factors.map((f, i) => (
-                  <span key={i} style={{
-                    fontFamily: MONO, fontSize: 9,
-                    background: "#161b22", border: "1px solid #21262d",
-                    borderRadius: 5, padding: "4px 10px", color: "#8b949e",
-                  }}>
-                    {f}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Bull / Bear case ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
             {[
-              ["🐂 BULL CASE", signal.bull_case, "#3fb950", "#0d2a1a"],
-              ["🐻 BEAR CASE", signal.bear_case, "#f85149", "#2a0808"],
-            ].map(([label, text, col, bg]) => (
-              <div key={label} style={{
-                background: bg, border: `1px solid ${col}33`,
-                borderRadius: 8, padding: "10px 12px",
-              }}>
-                <div style={{ fontFamily: MONO, fontSize: 8, color: col, letterSpacing: 1, marginBottom: 5 }}>{label}</div>
-                <div style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e", lineHeight: 1.55 }}>{text}</div>
+              ["Current",   currentPrice || signal.price_at_signal, null],
+              ["Target",    signal.target_price,  signal.expected_return_pct],
+              ["Stop Loss", signal.stop_loss,      null],
+            ].map(([label, val, pct]) => (
+              <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                <span style={{ fontFamily: MONO, fontSize: 8, color: "#6e7681" }}>{label.toUpperCase()}</span>
+                <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                  <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: "#e6edf3" }}>{fmt(val)}</span>
+                  {pct != null && (
+                    <span style={{ fontFamily: MONO, fontSize: 9, color: pct >= 0 ? "#3fb950" : "#f85149" }}>
+                      {fmtPct(pct)}
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
+            <div style={{ borderTop: "1px solid #21262d", paddingTop: 6, marginTop: 2 }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontFamily: MONO, fontSize: 8, color: "#6e7681" }}>TIMEFRAME</span>
+                <span style={{ fontFamily: MONO, fontSize: 9, color: "#58a6ff" }}>{signal.timeframe}</span>
+              </div>
+            </div>
           </div>
+        </div>
+      </div>
 
-          {/* ── Retail sentiment ── */}
-          <SentimentBar sentiment={signal.sentiment} />
+      {/* ── Price prediction chart ── */}
+      <PredictionChart
+        current={currentPrice || signal.price_at_signal}
+        targets={signal.price_targets}
+        signal={signal.signal}
+      />
 
-          {/* ── Insider activity ── */}
-          <InsiderActivity
-            trades={signal.insider_trades}
-            summary={signal.insider_summary}
-          />
-
-          {/* ── Disclaimer ── */}
-          <div style={{
-            fontFamily: MONO, fontSize: 8, color: "#3a4258", lineHeight: 1.6,
-            borderTop: "1px solid #21262d", paddingTop: 10, marginTop: 4,
-          }}>
-            ⚠ This signal is AI-generated for informational purposes only. Not financial advice.
-            Past performance does not guarantee future results. Always do your own research.
+      {/* ── Key factors ── */}
+      {signal.key_factors?.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontFamily: MONO, fontSize: 8, color: "#6e7681", letterSpacing: 1, marginBottom: 8 }}>
+            KEY FACTORS
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {signal.key_factors.map((f, i) => (
+              <span key={i} style={{
+                fontFamily: MONO, fontSize: 9,
+                background: "#161b22", border: "1px solid #21262d",
+                borderRadius: 5, padding: "4px 10px", color: "#8b949e",
+              }}>{f}</span>
+            ))}
           </div>
         </div>
       )}
+
+      {/* ── Bull / Bear case ── */}
+      {(signal.bull_case || signal.bear_case) && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+          {signal.bull_case && (
+            <div style={{ background: "#0d2a1a", border: "1px solid #1a633633", borderRadius: 8, padding: "10px 12px" }}>
+              <div style={{ fontFamily: MONO, fontSize: 8, color: "#3fb950", letterSpacing: 1, marginBottom: 5 }}>🐂 BULL CASE</div>
+              <div style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e", lineHeight: 1.55 }}>{signal.bull_case}</div>
+            </div>
+          )}
+          {signal.bear_case && (
+            <div style={{ background: "#2a0808", border: "1px solid #7a1a1a33", borderRadius: 8, padding: "10px 12px" }}>
+              <div style={{ fontFamily: MONO, fontSize: 8, color: "#f85149", letterSpacing: 1, marginBottom: 5 }}>🐻 BEAR CASE</div>
+              <div style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e", lineHeight: 1.55 }}>{signal.bear_case}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Retail sentiment ── */}
+      <SentimentBar sentiment={signal.sentiment} />
+
+      {/* ── Insider activity ── */}
+      <InsiderActivity trades={signal.insider_trades} summary={signal.insider_summary} />
+
+      {/* ── Disclaimer ── */}
+      <div style={{
+        fontFamily: MONO, fontSize: 8, color: "#3a4258", lineHeight: 1.6,
+        borderTop: "1px solid #21262d", paddingTop: 10, marginTop: 4,
+      }}>
+        ⚠ AI-generated signal for informational purposes only. Not financial advice.
+        Signal is shared across all users and refreshes every 24 hours.
+      </div>
     </div>
   );
 }
