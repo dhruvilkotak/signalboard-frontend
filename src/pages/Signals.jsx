@@ -494,7 +494,7 @@ export default function Signals({ watchlist = [] }) {
     setErr(null);
 
     try {
-      const res = await fetch(`${API}/api/signals/feed?${buildQS(cur)}`);
+      const res = await fetch(`${API}/api/signals/stream?${buildQS(cur)}`);
       if (!res.ok) throw new Error(`${res.status}`);
 
       const data = await res.json();
