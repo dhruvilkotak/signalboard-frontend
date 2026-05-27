@@ -480,16 +480,38 @@ export default function Signals({ watchlist = [] }) {
 
   const loadFeed = useCallback(async (reset = false) => {
     const cur = reset ? null : cursor;
-    if (!reset && (!hasMore || loadMore)) return;
-    reset ? setLoading(true) : setLoadMore(true);
+  
+    if (!reset && (!hasMore || loadMore || !cursor)) return;
+  
+    if (reset) {
+      setLoading(true);
+      setCursor(null);
+      setHasMore(true);
+    } else {
+      setLoadMore(true);
+    }
+  
     setErr(null);
+  
     try {
       const res = await fetch(`${API}/api/signals/feed?${buildQS(cur)}`);
       if (!res.ok) throw new Error(`${res.status}`);
+  
       const data = await res.json();
-      setFeed(prev => reset ? (data.signals || []) : [...prev, ...(data.signals || [])]);
+      const incoming = data.signals || [];
+  
+      setFeed(prev => {
+        if (reset) return incoming;
+  
+        const seen = new Set(prev.map(s => `${s.symbol}-${s.generated_at}`));
+        return [
+          ...prev,
+          ...incoming.filter(s => !seen.has(`${s.symbol}-${s.generated_at}`)),
+        ];
+      });
+  
       setCursor(data.next_cursor || null);
-      setHasMore(!!data.next_cursor);
+      setHasMore(Boolean(data.next_cursor));
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -503,7 +525,9 @@ export default function Signals({ watchlist = [] }) {
     const el = bottomRef.current;
     if (!el) return;
     const obs = new IntersectionObserver(([e]) => {
-      if (e.isIntersecting && hasMore && !loadMore) loadFeed();
+      if (e.isIntersecting && hasMore && cursor && !loadMore) {
+        loadFeed();
+      }
     }, { threshold: 0.1 });
     obs.observe(el);
     return () => obs.disconnect();
@@ -584,7 +608,7 @@ export default function Signals({ watchlist = [] }) {
 
       {/* Feed */}
       {loading ? (
-        <div className="card-grid">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
           {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : feed.length === 0 ? (
@@ -608,7 +632,7 @@ export default function Signals({ watchlist = [] }) {
           )}
         </div>
       ) : (
-        <div className="card-grid">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
           {feed.map((sig, i) => (
             <SignalCard key={`${sig.symbol}-${sig.generated_at ?? i}`} sig={sig} />
           ))}
