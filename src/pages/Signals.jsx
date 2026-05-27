@@ -6,6 +6,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer } from "recharts";
 import { useAuthContext } from "../App";
+import InsiderActivity from "../components/signal/InsiderActivity";
+import SentimentBar from "../components/signal/SentimentBar";
+import KeyFactors from "../components/signal/KeyFactors";
+import BullBearCase from "../components/signal/BullBearCase";
 
 const API  = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 const MONO = "'IBM Plex Mono', monospace";
@@ -81,101 +85,6 @@ function PredictionSparkline({ current, targets, signal }) {
             fill={`url(#grad-${signal})`} dot={{ fill: color, r: 2, strokeWidth: 0 }} />
         </AreaChart>
       </ResponsiveContainer>
-    </div>
-  );
-}
-
-// ── Insider table ─────────────────────────────────────────────────────────────
-function InsiderTable({ trades, summary }) {
-  if (!trades) return null;
-  return (
-    <div style={{ marginBottom: 12 }}>
-      <div style={{ fontFamily: MONO, fontSize: 7, color: "#6e7681", letterSpacing: 1, marginBottom: 6 }}>
-        SEC INSIDER ACTIVITY (FORM 4 — LAST 90 DAYS)
-      </div>
-      {trades.length === 0 ? (
-        <div style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681" }}>
-          No insider filings in last 90 days
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          {trades.map((t, i) => {
-            const tc = INSIDER_COLOR[t.type] || { color: "#8b949e", bg: "#161b22", border: "#21262d", icon: "•" };
-            return (
-              <div key={i} style={{
-                display: "grid",
-                gridTemplateColumns: "auto 1fr auto auto auto",
-                gap: 8, alignItems: "center",
-                background: tc.bg, border: `1px solid ${tc.border}`,
-                borderRadius: 6, padding: "5px 10px",
-              }}>
-                <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: tc.color, minWidth: 60 }}>
-                  {tc.icon} {t.type}
-                </span>
-                <div>
-                  <div style={{ fontFamily: MONO, fontSize: 9, color: "#e6edf3" }}>{t.name}</div>
-                  <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-                    {t.role && t.role !== "Insider" && (
-                      <span style={{ fontFamily: MONO, fontSize: 7, color: "#6e7681" }}>{t.role}</span>
-                    )}
-                    {t.is_10b5 && (
-                      <span style={{ fontFamily: MONO, fontSize: 7, color: "#6e7681", background: "#21262d", borderRadius: 3, padding: "0 4px" }}>10b5-1</span>
-                    )}
-                  </div>
-                </div>
-                <span style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e", textAlign: "right" }}>
-                  {t.shares ? `${t.shares.toLocaleString()} sh` : "—"}
-                </span>
-                <span style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e", textAlign: "right" }}>
-                  {t.price ? fmt(t.price) : "—"}
-                </span>
-                <span style={{ fontFamily: MONO, fontSize: 9, color: tc.color, fontWeight: 700, textAlign: "right" }}>
-                  {t.total_value ? fmtNum(t.total_value) : "—"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {summary && (
-        <div style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e", marginTop: 6, lineHeight: 1.5 }}>
-          {summary}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Sentiment bar ─────────────────────────────────────────────────────────────
-function SentimentBar({ sentiment }) {
-  if (!sentiment?.sentiment_label) return null;
-  const bull = sentiment.bullish_pct || 50;
-  const bear = sentiment.bearish_pct || 50;
-  return (
-    <div style={{ marginBottom: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-        <span style={{ fontFamily: MONO, fontSize: 7, color: "#6e7681", letterSpacing: 1 }}>
-          RETAIL SENTIMENT (STOCKTWITS)
-        </span>
-        <span style={{ fontFamily: MONO, fontSize: 7, color: "#6e7681" }}>
-          {sentiment.message_volume || 0} msgs · {(sentiment.watchlist_count || 0).toLocaleString()} watching
-        </span>
-      </div>
-      <div style={{ height: 5, background: "#21262d", borderRadius: 3, overflow: "hidden", display: "flex" }}>
-        <div style={{ width: `${bull}%`, background: "#3fb950" }} />
-        <div style={{ width: `${bear}%`, background: "#f85149" }} />
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3 }}>
-        <span style={{ fontFamily: MONO, fontSize: 8, color: "#3fb950" }}>▲ {bull}% Bullish</span>
-        <span style={{
-          fontFamily: MONO, fontSize: 9, fontWeight: 700,
-          color: sentiment.sentiment_label === "Bullish" ? "#3fb950"
-               : sentiment.sentiment_label === "Bearish" ? "#f85149" : "#e3b341",
-        }}>
-          {sentiment.sentiment_label}
-        </span>
-        <span style={{ fontFamily: MONO, fontSize: 8, color: "#f85149" }}>{bear}% Bearish ▼</span>
-      </div>
     </div>
   );
 }
@@ -313,39 +222,10 @@ function SignalCard({ sig }) {
           )}
 
           <PredictionSparkline current={sig.price_at_signal} targets={sig.price_targets} signal={type} />
-
-          {sig.key_factors?.length > 0 && (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontFamily: MONO, fontSize: 7, color: "#6e7681", letterSpacing: 1, marginBottom: 5 }}>KEY FACTORS</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                {sig.key_factors.map((f, i) => (
-                  <span key={i} style={{ fontFamily: MONO, fontSize: 8, background: "#161b22", border: "1px solid #21262d", borderRadius: 4, padding: "2px 7px", color: "#8b949e" }}>
-                    {f}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {(sig.bull_case || sig.bear_case) && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
-              {sig.bull_case && (
-                <div style={{ background: "#0d2a1a", border: "1px solid #1a633633", borderRadius: 7, padding: "8px 10px" }}>
-                  <div style={{ fontFamily: MONO, fontSize: 7, color: "#3fb950", letterSpacing: 1, marginBottom: 4 }}>🐂 BULL CASE</div>
-                  <div style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e", lineHeight: 1.55 }}>{sig.bull_case}</div>
-                </div>
-              )}
-              {sig.bear_case && (
-                <div style={{ background: "#2a0808", border: "1px solid #7a1a1a33", borderRadius: 7, padding: "8px 10px" }}>
-                  <div style={{ fontFamily: MONO, fontSize: 7, color: "#f85149", letterSpacing: 1, marginBottom: 4 }}>🐻 BEAR CASE</div>
-                  <div style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e", lineHeight: 1.55 }}>{sig.bear_case}</div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <InsiderTable trades={sig.insider_trades} summary={sig.insider_summary} />
-          <SentimentBar sentiment={sig.sentiment} />
+          <KeyFactors factors={sig.key_factors} compact />
+          <BullBearCase bullCase={sig.bull_case} bearCase={sig.bear_case} compact />
+          <InsiderActivity trades={sig.insider_trades} summary={sig.insider_summary} />
+          <SentimentBar sentiment={sig.sentiment} compact />
 
           <div style={{ fontFamily: MONO, fontSize: 7, color: "#3a4258", lineHeight: 1.6, borderTop: "1px solid #21262d", paddingTop: 8, marginTop: 4 }}>
             ⚠ AI-generated signal. Not financial advice. Do your own research.
