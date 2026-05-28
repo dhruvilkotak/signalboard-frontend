@@ -5,11 +5,28 @@
 const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 
 // Token getter — set by App.jsx after auth state resolves
-let _getToken = () => null;
+let _getToken = () => Promise.resolve(null);
 export function setTokenGetter(fn) { _getToken = fn; }
 
+// Firebase auth instance — set once so we can always get fresh tokens
+let _firebaseAuth = null;
+export function setFirebaseAuth(auth) { _firebaseAuth = auth; }
+
 async function authHeaders() {
-  const token = await _getToken();
+  // Always get a fresh token directly from Firebase if available
+  // Firebase caches internally and only makes a network call when token expires
+  // This eliminates ALL race conditions between token setter and API calls
+  let token = null;
+  if (_firebaseAuth?.currentUser) {
+    try {
+      token = await _firebaseAuth.currentUser.getIdToken();
+    } catch (e) {
+      console.warn("[API] getIdToken failed:", e.message);
+    }
+  } else {
+    // Fallback to registered getter (for compatibility)
+    token = await _getToken();
+  }
   return token
     ? { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
     : { "Content-Type": "application/json" };

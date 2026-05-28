@@ -3,7 +3,8 @@
 
 import { useState, useEffect, useCallback, createContext, useContext } from "react";
 import { useAuth } from "./hooks/useAuth";
-import { setTokenGetter, getWatchlist, addToWatchlist, removeFromWatchlist, getPortfolioSummary } from "./lib/api";
+import { auth as firebaseAuth } from "./lib/firebase";
+import { setTokenGetter, setFirebaseAuth, getWatchlist, addToWatchlist, removeFromWatchlist, getPortfolioSummary } from "./lib/api";
 import { usePrices } from "./hooks/usePrices";
 
 import Login         from "./pages/Login";
@@ -12,6 +13,9 @@ import PendingScreen from "./pages/PendingScreen";
 import Signals       from "./pages/Signals";
 import Trader        from "./pages/Trader";
 import Chat          from "./pages/Chat";
+
+// Wire Firebase auth into api.js immediately — eliminates token race condition
+setFirebaseAuth(firebaseAuth);
 
 export const AuthContext = createContext(null);
 export const useAuthContext = () => useContext(AuthContext);
@@ -24,6 +28,7 @@ export default function App() {
   const [watchlist,      setWatchlist]      = useState(DEFAULT_TICKERS);
   const [AdminPage,      setAdminPage]      = useState(null);
   const [portfolioValue, setPortfolioValue] = useState(null);
+  const [tokenReady,     setTokenReady]     = useState(false);
   const { prices, connected } = usePrices();
 
   // Wire token into api.js — use auth.token (already fetched by useAuth)
@@ -32,9 +37,11 @@ export default function App() {
     if (auth.token) {
       console.log("[Auth] Token ready — wiring into api.js");
       setTokenGetter(() => Promise.resolve(auth.token));
+      setTokenReady(true);
     } else {
       console.log("[Auth] No token — using getIdToken() fallback");
       setTokenGetter(() => auth.user?.getIdToken() ?? Promise.resolve(null));
+      setTokenReady(false);
     }
   }, [auth.token, auth.user]);
 
@@ -136,9 +143,9 @@ export default function App() {
         </nav>
 
         <main style={main}>
-          {tab === "prices"  && <LiveDashboard watchlist={watchlist} onAdd={handleAdd} onRemove={handleRemove} prices={prices} />}
+          {tab === "prices"  && <LiveDashboard watchlist={watchlist} onAdd={handleAdd} onRemove={handleRemove} prices={prices} tokenReady={tokenReady} />}
           {tab === "signals" && <Signals watchlist={watchlist} />}
-          {tab === "trader"  && <Trader onPortfolioUpdate={setPortfolioValue} />}
+          {tab === "trader"  && <Trader onPortfolioUpdate={setPortfolioValue} tokenReady={tokenReady} />}
           {tab === "chat"    && <Chat watchlist={watchlist} />}
           {tab === "admin"   && auth.isAdmin && AdminPage && <AdminPage />}
           {tab === "admin"   && !auth.isAdmin && <div style={denied}>Access denied.</div>}
