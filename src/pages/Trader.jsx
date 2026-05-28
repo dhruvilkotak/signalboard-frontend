@@ -5,8 +5,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  getPortfolioOverview, getManualPositions, getManualTrades,
-  getStrategyPositions, getStrategyTrades, getPortfolioTransactions,
+  getPortfolioOverview, getManualTrades,
+  getStrategyTrades, getPortfolioTransactions,
   portfolioAcceptAgreement, portfolioAllocate, portfolioReduce,
   portfolioPause, portfolioStop,
 } from "../lib/api";
@@ -92,8 +92,13 @@ function ConfirmModal({ title, description, warning, details, confirmLabel,
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn" style={{ flex: 1 }} onClick={onCancel} disabled={loading}>Cancel</button>
-          <button className={`btn ${confirmClass}`}
-            style={{ flex: 1, opacity: loading ? 0.6 : 1 }}
+          <button
+            className="btn"
+            style={{
+              flex: 1, opacity: loading ? 0.6 : 1,
+              ...(confirmClass === "btn-primary" ? { background: "linear-gradient(135deg,#1f6feb,#388bfd)", borderColor: "transparent", color: "#fff", fontWeight: 700 } : {}),
+              ...(confirmClass === "btn-danger"  ? { background: "#f8514915", border: "1px solid #f8514950", color: "var(--red)", fontWeight: 700 } : {}),
+            }}
             onClick={onConfirm} disabled={loading}>
             {loading ? "Processing…" : confirmLabel}
           </button>
