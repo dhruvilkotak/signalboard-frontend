@@ -8,6 +8,7 @@ import {
   portfolioDeposit, portfolioWithdraw, portfolioReset,
   portfolioSetStrategy, portfolioToggle, portfolioAcceptAgreement,
 } from "../lib/api";
+import { TradeHistoryTab, TransactionHistoryTab } from "../components/TradeHistory";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt     = (n, d = 2) => (n ?? 0).toFixed(d);
@@ -489,18 +490,10 @@ export default function Trader() {
       )}
 
       {/* ── Trades ───────────────────────────────────────────────────────────── */}
-      {tab === "trades" && (
-        trades.length === 0
-          ? <Empty msg="No trades executed yet." />
-          : trades.map((t, i) => <TradeCard key={i} t={t} />)
-      )}
+      {tab === "trades" && <TradeHistoryTab trades={trades} />}
 
       {/* ── Transactions ─────────────────────────────────────────────────────── */}
-      {tab === "transactions" && (
-        transactions.length === 0
-          ? <Empty msg="No wallet transactions yet." />
-          : transactions.map((t, i) => <TxCard key={i} t={t} />)
-      )}
+      {tab === "transactions" && <TransactionHistoryTab transactions={transactions} wallet={wallet} />}
 
       {/* ── Strategy ─────────────────────────────────────────────────────────── */}
       {tab === "strategy" && (
