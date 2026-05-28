@@ -1,10 +1,9 @@
-// src/App.jsx — v3 (portfolio bar uses new getPortfolioSummary)
-// Same as before but uses getPortfolioSummary instead of getPortfolioWallet
+// src/App.jsx — v3 (portfolio bar uses getPortfolioOverview for accurate total_value)
 
 import { useState, useEffect, useCallback, createContext, useContext } from "react";
 import { useAuth } from "./hooks/useAuth";
 import { auth as firebaseAuth } from "./lib/firebase";
-import { setTokenGetter, setFirebaseAuth, getWatchlist, addToWatchlist, removeFromWatchlist, getPortfolioSummary } from "./lib/api";
+import { setTokenGetter, setFirebaseAuth, getWatchlist, addToWatchlist, removeFromWatchlist, getPortfolioOverview } from "./lib/api";
 import { usePrices } from "./hooks/usePrices";
 
 import Login         from "./pages/Login";
@@ -48,7 +47,7 @@ export default function App() {
   // Step 2: fetch data — 100ms delay ensures token getter is propagated
   // before the first authenticated API call fires
   const fetchPortfolioSummary = useCallback(
-    () => getPortfolioSummary().then(s => setPortfolioValue(s)).catch(() => {}),
+    () => getPortfolioOverview().then(ov => setPortfolioValue(ov.summary)).catch(() => {}),
     []
   );
 
