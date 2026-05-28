@@ -26,10 +26,17 @@ export default function App() {
   const [portfolioValue, setPortfolioValue] = useState(null);
   const { prices, connected } = usePrices();
 
-  // Step 1: wire token into api.js immediately when user is available
+  // Wire token into api.js — use auth.token (already fetched by useAuth)
+  // so it's available synchronously. No race condition with API calls.
   useEffect(() => {
-    setTokenGetter(() => auth.user?.getIdToken() ?? Promise.resolve(null));
-  }, [auth.user]);
+    if (auth.token) {
+      // Token is already available — set it synchronously
+      setTokenGetter(() => Promise.resolve(auth.token));
+    } else {
+      // Fallback: call getIdToken() for token refresh cases
+      setTokenGetter(() => auth.user?.getIdToken() ?? Promise.resolve(null));
+    }
+  }, [auth.token, auth.user]);
 
   // Step 2: fetch data — 100ms delay ensures token getter is propagated
   // before the first authenticated API call fires
@@ -41,15 +48,13 @@ export default function App() {
   useEffect(() => {
     if (!auth.user || auth.isPending) return;
 
-    const timer = setTimeout(() => {
-      getWatchlist()
-        .then(data => setWatchlist(data.symbols || DEFAULT_TICKERS))
-        .catch(() => setWatchlist(DEFAULT_TICKERS));
-      fetchPortfolioSummary();
-    }, 100);  // tiny delay — token getter must propagate before first API call
+    getWatchlist()
+      .then(data => setWatchlist(data.symbols || DEFAULT_TICKERS))
+      .catch(() => setWatchlist(DEFAULT_TICKERS));
+    fetchPortfolioSummary();
 
     const iv = setInterval(fetchPortfolioSummary, 60000);
-    return () => { clearTimeout(timer); clearInterval(iv); };
+    return () => clearInterval(iv);
   }, [auth.user, auth.isPending, fetchPortfolioSummary]);
 
   const handleTabChange = (newTab) => {
