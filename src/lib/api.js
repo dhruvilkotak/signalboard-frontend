@@ -114,8 +114,13 @@ export const portfolioSetStrategy  = (strategy, stop_loss_pct) =>
   post("/api/portfolio/strategy", { strategy, ...(stop_loss_pct != null ? { stop_loss_pct } : {}) });
 export const portfolioToggle       = (is_active) => post("/api/portfolio/toggle",    { is_active });
 export const portfolioAcceptAgreement = ()       => post("/api/portfolio/agreement");
-export const portfolioManualTrade  = (symbol, action) =>
-  post("/api/portfolio/trade", { symbol, action });
+export const portfolioManualTrade = (symbol, action, { amountUsd, shares } = {}) =>
+  post("/api/portfolio/trade", {
+    symbol,
+    action,
+    ...(amountUsd != null ? { amount_usd: amountUsd } : {}),
+    ...(shares    != null ? { shares }                : {}),
+  });
 
 // Admin
 export const getAutoTraderStatus   = ()          => get("/api/portfolio/admin/status");

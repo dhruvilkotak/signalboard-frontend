@@ -425,8 +425,7 @@ export default function Trader() {
         >
           {wallet.is_active ? "⏸ Pause Auto-Trader" : "▶ Start Auto-Trader"}
         </button>
-        <button className="btn" onClick={() => setWalletModal("deposit")}>＋ Deposit</button>
-        <button className="btn" onClick={() => setWalletModal("withdraw")}>－ Withdraw</button>
+
         <div style={{ flex: 1 }} />
         <div className="strategy-badge">
           <span className="hint">STRATEGY</span>
@@ -501,6 +500,33 @@ export default function Trader() {
           <div className="hint" style={{ marginBottom: 14 }}>
             Select your investment strategy. Existing positions stay open under old rules until closed.
           </div>
+
+          {/* Wallet settings — moved here from main controls */}
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="stat-label" style={{ marginBottom: 10 }}>VIRTUAL WALLET SETTINGS</div>
+            <div className="hint" style={{ marginBottom: 12, lineHeight: 1.5 }}>
+              Manage your virtual cash balance. These funds are only used for paper trading — no real money involved.
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button className="btn" onClick={() => setWalletModal("deposit")}>＋ Add Virtual Funds</button>
+              <button className="btn" onClick={() => setWalletModal("withdraw")}>－ Withdraw Virtual Funds</button>
+            </div>
+            <div style={{ marginTop: 10, display: "flex", gap: 16 }}>
+              <div className="stat-item">
+                <span className="stat-label">Available Cash</span>
+                <span className="stat-value">${fmt(wallet.balance)}</span>
+              </div>
+              <div className="stat-item">
+                <span className="stat-label">Total Deposited</span>
+                <span className="stat-value">${fmt(wallet.total_deposited)}</span>
+              </div>
+              <div className="stat-item">
+                <span className="stat-label">Total Withdrawn</span>
+                <span className="stat-value">${fmt(wallet.total_withdrawn)}</span>
+              </div>
+            </div>
+          </div>
+
           <div className="strategy-grid">
             {Object.entries(strategies).map(([sk, cfg]) => (
               <StrategyCard key={sk} sk={sk} cfg={cfg} selected={strategyKey} onSelect={handleStrategyChange} />
