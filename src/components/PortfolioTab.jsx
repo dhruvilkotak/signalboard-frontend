@@ -1,9 +1,8 @@
-// src/components/PortfolioTab.jsx — v3
-// Shows all positions for selected symbol across all strategies
-// Manual BUY/SELL requires picking a strategy
+// src/components/PortfolioTab.jsx — v4
+// Manual trades from available cash. No strategy needed. Simple and clean.
 
 import { useState, useEffect } from "react";
-import { getPortfolioOverview, portfolioManualTrade } from "../lib/api";
+import { getPortfolioOverview, manualBuy, manualSell } from "../lib/api";
 
 const MONO = "'IBM Plex Mono', monospace";
 const S = {
@@ -13,151 +12,221 @@ const S = {
   val:   { fontFamily: MONO, fontSize: 13, fontWeight: 700, color: "#e6edf3" },
   row:   { display: "flex", gap: 16, flexWrap: "wrap", marginTop: 8 },
   col:   { display: "flex", flexDirection: "column", gap: 2 },
-  input: { background: "#0d1117", border: "1px solid #30363d", borderRadius: 6, padding: "7px 10px", color: "#e6edf3", fontFamily: MONO, fontSize: 12, outline: "none", width: "100%" },
+  input: { background: "#0d1117", border: "1px solid #30363d", borderRadius: 6,
+           padding: "7px 10px", color: "#e6edf3", fontFamily: MONO, fontSize: 12, outline: "none", width: "100%" },
 };
-
 const pnlColor = (n) => (n ?? 0) >= 0 ? "#3fb950" : "#f85149";
 const sign     = (n) => (n ?? 0) >= 0 ? "+" : "";
 const fmt      = (n, d = 2) => (+(n ?? 0)).toFixed(d);
 
-function SlBar({ buyPrice, stopPrice, currentPrice }) {
-  if (!buyPrice || !stopPrice || !currentPrice) return null;
-  const range = buyPrice - stopPrice;
-  const pct   = range > 0 ? Math.max(0, Math.min(100, ((currentPrice - stopPrice) / range) * 100)) : 100;
-  const color = pct < 20 ? "#f85149" : pct < 50 ? "#e3b341" : "#3fb950";
+// ── Stop-loss bar (display only for manual — no auto stop-loss) ───────────────
+function SlBar({ avgBuy, currentPrice }) {
+  if (!avgBuy || !currentPrice) return null;
+  const pct   = Math.min(100, Math.max(0, (currentPrice / avgBuy) * 100));
+  const color = pct >= 100 ? "#3fb950" : pct >= 90 ? "#e3b341" : "#f85149";
   return (
     <div style={{ marginTop: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontFamily: MONO, fontSize: 8, color: "#6e7681", marginBottom: 3 }}>
-        <span>Stop ${fmt(stopPrice)}</span><span>Buy ${fmt(buyPrice)}</span>
+        <span>Avg Buy ${fmt(avgBuy)}</span>
+        <span>Now ${fmt(currentPrice)}</span>
       </div>
       <div style={{ height: 4, background: "#21262d", borderRadius: 2, overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 2, transition: "width 0.4s" }} />
+        <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: color, borderRadius: 2, transition: "width 0.4s" }} />
       </div>
     </div>
   );
 }
 
-// ── Trade confirm modal ───────────────────────────────────────────────────────
-function TradeModal({ action, symbol, price, strategies, onConfirm, onCancel, loading }) {
-  const isBuy       = action === "BUY";
-  const [sk,        setSk]      = useState("");
-  const [mode,      setMode]    = useState("usd");
-  const [inputVal,  setInputVal] = useState("");
-
-  const numVal   = parseFloat(inputVal) || 0;
-  const strat    = strategies.find(s => s.key === sk);
-  const idleCash = strat?.cash_in_strategy ?? 0;
-
+// ── Buy modal ─────────────────────────────────────────────────────────────────
+function BuyModal({ symbol, price, availableCash, onConfirm, onCancel, loading }) {
+  const [mode,     setMode]     = useState("usd");
+  const [inputVal, setInputVal] = useState("");
+  const numVal    = parseFloat(inputVal) || 0;
   const sharesCalc = mode === "usd" && price > 0 ? numVal / price : mode === "shares" ? numVal : null;
   const costCalc   = mode === "usd" ? numVal : mode === "shares" ? numVal * price : null;
-  const overBudget = isBuy && costCalc != null && costCalc > idleCash;
-  const valid      = sk && (!isBuy || mode === "strategy" || (numVal > 0 && !overBudget));
+  const overBudget = costCalc != null && costCalc > availableCash;
+  const valid      = numVal > 0 && !overBudget;
 
   const handleConfirm = () => {
     if (!valid) return;
-    if (mode === "usd")      onConfirm(sk, { amountUsd: numVal });
-    else if (mode === "shares") onConfirm(sk, { shares: numVal });
-    else onConfirm(sk, {});
+    if (mode === "usd")    onConfirm({ amountUsd: numVal });
+    else                   onConfirm({ shares: numVal });
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(1,4,9,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(4px)" }}>
-      <div style={{ background: "#161b22", border: "1px solid #21262d", borderRadius: 14, padding: 24, maxWidth: 420, width: "92%" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(1,4,9,0.88)",
+      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(4px)" }}>
+      <div style={{ background: "#161b22", border: "1px solid #21262d", borderRadius: 14, padding: 24, maxWidth: 400, width: "92%" }}>
         <div style={{ fontFamily: MONO, fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
-          {isBuy ? "▲ BUY" : "▼ SELL"} {symbol}
+          ▲ BUY {symbol}
         </div>
         <div style={{ fontFamily: MONO, fontSize: 11, color: "#6e7681", marginBottom: 16 }}>
-          Current price: <strong style={{ color: "#e6edf3" }}>${fmt(price)}</strong>
+          Price: <strong style={{ color: "#e6edf3" }}>${fmt(price)}</strong>
+          <span style={{ marginLeft: 12 }}>Available: <strong style={{ color: "#3fb950" }}>${fmt(availableCash)}</strong></span>
         </div>
 
-        {/* Strategy picker */}
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ ...S.label, marginBottom: 8 }}>SELECT STRATEGY</div>
-          {strategies.length === 0 ? (
-            <div style={{ fontFamily: MONO, fontSize: 11, color: "#e3b341", padding: "8px 12px", background: "#e3b34112", borderRadius: 6, border: "1px solid #e3b34130" }}>
-              ⚠ No strategies allocated. Go to Auto-Trader tab to allocate funds first.
-            </div>
-          ) : strategies.map(s => (
-            <label key={s.key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", marginBottom: 4,
-              background: sk === s.key ? "#1f6feb15" : "#0d1117", borderRadius: 6,
-              border: `1px solid ${sk === s.key ? "#1f6feb60" : "#21262d"}`, cursor: "pointer" }}>
-              <input type="radio" value={s.key} checked={sk === s.key} onChange={() => setSk(s.key)} style={{ accentColor: "#58a6ff" }} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700 }}>{s.label}</div>
-                <div style={{ fontFamily: MONO, fontSize: 10, color: "#6e7681" }}>
-                  Idle cash: ${fmt(s.cash_in_strategy)} · Invested: ${fmt(s.invested)}
-                </div>
-              </div>
-            </label>
+        {/* Mode toggle */}
+        <div style={{ display: "flex", gap: 4, marginBottom: 12, background: "#0d1117", borderRadius: 7, padding: 3 }}>
+          {[["usd", "$ Amount"], ["shares", "# Shares"]].map(([m, l]) => (
+            <button key={m} onClick={() => { setMode(m); setInputVal(""); }}
+              style={{ flex: 1, padding: "5px 0", borderRadius: 5, border: "none", fontFamily: MONO,
+                fontSize: 11, cursor: "pointer",
+                background: mode === m ? "#21262d" : "transparent",
+                color: mode === m ? "#e6edf3" : "#6e7681",
+                fontWeight: mode === m ? 700 : 400 }}>
+              {l}
+            </button>
           ))}
         </div>
 
-        {/* Amount input (BUY only) */}
-        {isBuy && sk && (
-          <>
-            <div style={{ display: "flex", gap: 4, marginBottom: 10, background: "#0d1117", borderRadius: 7, padding: 3 }}>
-              {[["usd", "$ Amount"], ["shares", "# Shares"], ["strategy", "Auto Size"]].map(([m, l]) => (
-                <button key={m} onClick={() => { setMode(m); setInputVal(""); }}
-                  style={{ flex: 1, padding: "5px 0", borderRadius: 5, border: "none", fontFamily: MONO, fontSize: 11, cursor: "pointer",
-                    background: mode === m ? "#21262d" : "transparent", color: mode === m ? "#e6edf3" : "#6e7681", fontWeight: mode === m ? 700 : 400 }}>
-                  {l}
-                </button>
-              ))}
+        {/* Quick picks */}
+        {mode === "usd" && (
+          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+            {[50, 100, 250, 500].filter(v => v <= availableCash).map(v => (
+              <button key={v} onClick={() => setInputVal(String(v))}
+                style={{ flex: 1, padding: "4px 0", borderRadius: 5, border: "1px solid #30363d",
+                  background: inputVal === String(v) ? "#21262d" : "transparent",
+                  color: "#8b949e", fontFamily: MONO, fontSize: 10, cursor: "pointer" }}>
+                ${v}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Input */}
+        <div style={{ position: "relative", marginBottom: 8 }}>
+          <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+            fontFamily: MONO, fontSize: 12, color: "#6e7681" }}>
+            {mode === "usd" ? "$" : "×"}
+          </span>
+          <input style={{ ...S.input, paddingLeft: 24 }}
+            type="number" min={0.000001}
+            placeholder={mode === "usd" ? "150.00" : "0.25"}
+            value={inputVal} onChange={e => setInputVal(e.target.value)} autoFocus />
+        </div>
+
+        {/* Preview */}
+        {numVal > 0 && (
+          <div style={{ background: "#0d1117", border: "1px solid #21262d", borderRadius: 8,
+            padding: "8px 12px", marginBottom: 12, fontFamily: MONO, fontSize: 11 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#6e7681" }}>Shares</span>
+              <span>{sharesCalc?.toFixed(6)}</span>
             </div>
-            {mode !== "strategy" && (
-              <>
-                <div style={{ position: "relative", marginBottom: 8 }}>
-                  <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontFamily: MONO, fontSize: 12, color: "#6e7681" }}>
-                    {mode === "usd" ? "$" : "×"}
-                  </span>
-                  <input style={{ ...S.input, paddingLeft: 24 }} type="number"
-                    placeholder={mode === "usd" ? "150.00" : "0.25"}
-                    value={inputVal} onChange={e => setInputVal(e.target.value)} autoFocus />
-                </div>
-                {/* Quick picks */}
-                {mode === "usd" && (
-                  <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-                    {[50, 100, 250, 500].map(v => (
-                      <button key={v} onClick={() => setInputVal(String(v))}
-                        style={{ flex: 1, padding: "4px 0", borderRadius: 5, border: "1px solid #30363d",
-                          background: inputVal === String(v) ? "#21262d" : "transparent",
-                          color: "#8b949e", fontFamily: MONO, fontSize: 10, cursor: "pointer" }}>
-                        ${v}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {numVal > 0 && (
-                  <div style={{ background: "#0d1117", border: "1px solid #21262d", borderRadius: 8, padding: "8px 12px", marginBottom: 10, fontFamily: MONO, fontSize: 11 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "#6e7681" }}>Shares</span>
-                      <span>{sharesCalc?.toFixed(6)}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                      <span style={{ color: "#6e7681" }}>Cost</span>
-                      <span style={{ color: overBudget ? "#f85149" : "#e6edf3" }}>${fmt(costCalc)}</span>
-                    </div>
-                    {overBudget && <div style={{ color: "#f85149", fontSize: 10, marginTop: 4 }}>Exceeds idle cash by ${fmt(costCalc - idleCash)}</div>}
-                  </div>
-                )}
-              </>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+              <span style={{ color: "#6e7681" }}>Total cost</span>
+              <span style={{ color: overBudget ? "#f85149" : "#e6edf3" }}>${fmt(costCalc)}</span>
+            </div>
+            {overBudget && (
+              <div style={{ color: "#f85149", fontSize: 10, marginTop: 4 }}>
+                Exceeds available cash by ${fmt(costCalc - availableCash)}
+              </div>
             )}
-          </>
+          </div>
         )}
 
         <div style={{ fontSize: 10, color: "#3a4258", fontFamily: MONO, marginBottom: 14 }}>
-          📊 Virtual money only — no real funds involved
+          📊 Virtual money only — uses your available cash · Auto-trader ignores this position
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
-          <button style={{ flex: 1, padding: "9px 0", borderRadius: 7, background: "#21262d", border: "1px solid #30363d", color: "#8b949e", fontFamily: MONO, fontSize: 12, cursor: "pointer" }}
+          <button style={{ flex: 1, padding: "9px 0", borderRadius: 7, background: "#21262d",
+            border: "1px solid #30363d", color: "#8b949e", fontFamily: MONO, fontSize: 12, cursor: "pointer" }}
             onClick={onCancel}>Cancel</button>
-          <button style={{ flex: 1, padding: "9px 0", borderRadius: 7, fontFamily: MONO, fontSize: 12, fontWeight: 700,
-            opacity: (!valid || loading) ? 0.4 : 1, cursor: (!valid || loading) ? "not-allowed" : "pointer",
-            border: "1px solid", background: isBuy ? "#0fffa315" : "#ff416215",
-            borderColor: isBuy ? "#0fffa350" : "#ff416250", color: isBuy ? "#0fffa3" : "#ff4162" }}
+          <button style={{ flex: 1, padding: "9px 0", borderRadius: 7, fontFamily: MONO,
+            fontSize: 12, fontWeight: 700, border: "1px solid #0fffa350",
+            background: "#0fffa315", color: "#0fffa3",
+            opacity: (!valid || loading) ? 0.4 : 1,
+            cursor: (!valid || loading) ? "not-allowed" : "pointer" }}
             disabled={!valid || loading} onClick={handleConfirm}>
-            {loading ? "Executing…" : `Confirm ${action}`}
+            {loading ? "Executing…" : "Confirm BUY"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Sell modal ────────────────────────────────────────────────────────────────
+function SellModal({ symbol, price, position, onConfirm, onCancel, loading }) {
+  const [mode,     setMode]     = useState("all");
+  const [inputVal, setInputVal] = useState("");
+  const heldShares = position?.shares ?? 0;
+  const numVal     = parseFloat(inputVal) || 0;
+  const sharesToSell = mode === "all" ? heldShares : numVal;
+  const proceeds     = (sharesToSell * price);
+  const pnl          = sharesToSell * (price - (position?.avg_buy_price ?? price));
+  const valid        = mode === "all" || (numVal > 0 && numVal <= heldShares);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(1,4,9,0.88)",
+      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(4px)" }}>
+      <div style={{ background: "#161b22", border: "1px solid #21262d", borderRadius: 14, padding: 24, maxWidth: 400, width: "92%" }}>
+        <div style={{ fontFamily: MONO, fontSize: 15, fontWeight: 700, marginBottom: 4, color: "#ff4162" }}>
+          ▼ SELL {symbol}
+        </div>
+        <div style={{ fontFamily: MONO, fontSize: 11, color: "#6e7681", marginBottom: 16 }}>
+          Price: <strong style={{ color: "#e6edf3" }}>${fmt(price)}</strong>
+          <span style={{ marginLeft: 12 }}>Holding: <strong style={{ color: "#e6edf3" }}>{fmt(heldShares, 4)} shares</strong></span>
+        </div>
+
+        <div style={{ display: "flex", gap: 4, marginBottom: 12, background: "#0d1117", borderRadius: 7, padding: 3 }}>
+          {[["all", "Sell All"], ["partial", "Partial"]].map(([m, l]) => (
+            <button key={m} onClick={() => { setMode(m); setInputVal(""); }}
+              style={{ flex: 1, padding: "5px 0", borderRadius: 5, border: "none", fontFamily: MONO,
+                fontSize: 11, cursor: "pointer",
+                background: mode === m ? "#21262d" : "transparent",
+                color: mode === m ? "#e6edf3" : "#6e7681", fontWeight: mode === m ? 700 : 400 }}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {mode === "partial" && (
+          <div style={{ marginBottom: 10 }}>
+            <input style={S.input} type="number" min={0.000001} max={heldShares}
+              placeholder={`Max ${fmt(heldShares, 4)} shares`}
+              value={inputVal} onChange={e => setInputVal(e.target.value)} autoFocus />
+            {numVal > heldShares && (
+              <div style={{ color: "#f85149", fontSize: 11, marginTop: 4 }}>
+                Cannot sell more than {fmt(heldShares, 4)} shares
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ background: "#0d1117", border: "1px solid #21262d", borderRadius: 8,
+          padding: "8px 12px", marginBottom: 14, fontFamily: MONO, fontSize: 11 }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: "#6e7681" }}>Shares to sell</span>
+            <span>{fmt(sharesToSell, 4)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+            <span style={{ color: "#6e7681" }}>Proceeds</span>
+            <span style={{ color: "#e6edf3" }}>${fmt(proceeds)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+            <span style={{ color: "#6e7681" }}>Est. P&L</span>
+            <span style={{ color: pnlColor(pnl) }}>{sign(pnl)}${fmt(Math.abs(pnl))}</span>
+          </div>
+        </div>
+
+        <div style={{ fontSize: 10, color: "#3a4258", fontFamily: MONO, marginBottom: 14 }}>
+          📊 Proceeds return to your available cash
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={{ flex: 1, padding: "9px 0", borderRadius: 7, background: "#21262d",
+            border: "1px solid #30363d", color: "#8b949e", fontFamily: MONO, fontSize: 12, cursor: "pointer" }}
+            onClick={onCancel}>Cancel</button>
+          <button style={{ flex: 1, padding: "9px 0", borderRadius: 7, fontFamily: MONO,
+            fontSize: 12, fontWeight: 700, border: "1px solid #ff416250",
+            background: "#ff416215", color: "#ff4162",
+            opacity: (!valid || loading) ? 0.4 : 1,
+            cursor: (!valid || loading) ? "not-allowed" : "pointer" }}
+            disabled={!valid || loading}
+            onClick={() => valid && onConfirm(mode === "partial" ? numVal : null)}>
+            {loading ? "Executing…" : mode === "all" ? "Confirm Sell All" : "Confirm Partial Sell"}
           </button>
         </div>
       </div>
@@ -169,7 +238,7 @@ function TradeModal({ action, symbol, price, strategies, onConfirm, onCancel, lo
 export default function PortfolioTab({ symbol, currentPrice }) {
   const [overview, setOverview] = useState(null);
   const [loading,  setLoading]  = useState(true);
-  const [confirm,  setConfirm]  = useState(null);   // "BUY" | "SELL"
+  const [modal,    setModal]    = useState(null);   // "buy" | "sell"
   const [trading,  setTrading]  = useState(false);
   const [result,   setResult]   = useState(null);
   const [error,    setError]    = useState(null);
@@ -183,62 +252,87 @@ export default function PortfolioTab({ symbol, currentPrice }) {
 
   useEffect(() => { load(); }, [symbol]);
 
-  const summary    = overview?.summary ?? {};
-  const strategies = overview?.strategies ?? {};
-  const hasAgreement = summary.agreement_accepted ?? false;
+  const summary       = overview?.summary ?? {};
+  const hasAgreement  = summary.agreement_accepted ?? false;
+  const availableCash = summary.available_cash ?? 0;
 
-  // All positions for this symbol across all strategies
-  const myPositions = Object.values(strategies).flatMap(s =>
-    (s.positions ?? []).filter(p => p.symbol === symbol.toUpperCase())
-  );
+  // Find manual position for this symbol
+  const manualPositions = overview?.manual?.positions ?? [];
+  const myPosition      = manualPositions.find(p => p.symbol === symbol.toUpperCase()) ?? null;
 
-  // Allocated strategies with idle cash (for BUY picker)
-  const allocatedStrats = Object.entries(strategies)
-    .filter(([, s]) => s.is_allocated)
-    .map(([key, s]) => ({ key, label: s.config.label, ...s.allocation }));
+  const livePrice = currentPrice ?? myPosition?.current_price ?? 0;
+  const livePnl   = myPosition && livePrice
+    ? (livePrice - myPosition.avg_buy_price) * myPosition.shares
+    : myPosition?.unrealized_pnl ?? 0;
+  const livePnlPct = myPosition?.avg_buy_price
+    ? ((livePrice - myPosition.avg_buy_price) / myPosition.avg_buy_price) * 100
+    : 0;
 
-  const handleTrade = async (sk, amountOpts = {}) => {
+  const handleBuy = async (opts) => {
     setTrading(true);
     try {
-      const res = await portfolioManualTrade(symbol, confirm, sk, amountOpts);
+      const res = await manualBuy(symbol, opts);
       if (res.status === "executed") {
-        setResult({ type: "ok",  msg: `${confirm} executed in ${strategies[sk]?.config?.label}` });
+        setResult({ type: "ok",  msg: `BUY executed — position opened` });
         await load();
       } else {
-        setResult({ type: "err", msg: res.reason ?? "Trade skipped" });
+        setResult({ type: "err", msg: res.reason ?? "Buy failed" });
       }
     } catch (e) {
-      setResult({ type: "err", msg: e.message ?? "Trade failed" });
+      setResult({ type: "err", msg: e.message ?? "Buy failed" });
     } finally {
-      setTrading(false); setConfirm(null);
+      setTrading(false); setModal(null);
+      setTimeout(() => setResult(null), 4000);
+    }
+  };
+
+  const handleSell = async (shares) => {
+    setTrading(true);
+    try {
+      const res = await manualSell(symbol, shares);
+      if (res.status === "executed") {
+        setResult({ type: "ok",  msg: `SELL executed — ${shares ? "partial sell" : "position closed"}` });
+        await load();
+      } else {
+        setResult({ type: "err", msg: res.reason ?? "Sell failed" });
+      }
+    } catch (e) {
+      setResult({ type: "err", msg: e.message ?? "Sell failed" });
+    } finally {
+      setTrading(false); setModal(null);
       setTimeout(() => setResult(null), 4000);
     }
   };
 
   if (loading) return (
     <div style={S.root}>
-      <div style={{ fontFamily: MONO, fontSize: 11, color: "#6e7681", textAlign: "center", marginTop: 40 }}>Loading…</div>
+      <div style={{ fontFamily: MONO, fontSize: 11, color: "#6e7681", textAlign: "center", marginTop: 40 }}>
+        Loading…
+      </div>
     </div>
   );
   if (error) return (
     <div style={S.root}>
       <div style={{ fontFamily: MONO, fontSize: 11, color: "#f85149", textAlign: "center", marginTop: 40 }}>
-        {error} <button style={{ color: "#58a6ff", background: "none", border: "none", cursor: "pointer", fontFamily: MONO }} onClick={load}>↻</button>
+        {error}
+        <button style={{ color: "#58a6ff", background: "none", border: "none", cursor: "pointer", fontFamily: MONO, marginLeft: 8 }}
+          onClick={load}>↻</button>
       </div>
     </div>
   );
 
   return (
     <div style={S.root}>
-      {confirm && (
-        <TradeModal
-          action={confirm} symbol={symbol} price={currentPrice ?? 0}
-          strategies={allocatedStrats}
-          onConfirm={handleTrade}
-          onCancel={() => setConfirm(null)}
-          loading={trading}
-        />
+
+      {modal === "buy" && (
+        <BuyModal symbol={symbol} price={livePrice} availableCash={availableCash}
+          onConfirm={handleBuy} onCancel={() => setModal(null)} loading={trading} />
       )}
+      {modal === "sell" && (
+        <SellModal symbol={symbol} price={livePrice} position={myPosition}
+          onConfirm={handleSell} onCancel={() => setModal(null)} loading={trading} />
+      )}
+
       {result && (
         <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
           background: result.type === "ok" ? "#0fffa320" : "#f8514920",
@@ -252,69 +346,68 @@ export default function PortfolioTab({ symbol, currentPrice }) {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div style={{ fontFamily: MONO, fontSize: 16, fontWeight: 700 }}>{symbol}</div>
-        <button style={{ fontFamily: MONO, fontSize: 10, color: "#6e7681", background: "#161b22", border: "1px solid #21262d", padding: "4px 10px", borderRadius: 6, cursor: "pointer" }} onClick={load}>↻</button>
+        <button style={{ fontFamily: MONO, fontSize: 10, color: "#6e7681", background: "#161b22",
+          border: "1px solid #21262d", padding: "4px 10px", borderRadius: 6, cursor: "pointer" }}
+          onClick={load}>↻</button>
       </div>
 
       {!hasAgreement && (
-        <div style={{ ...S.card, borderColor: "#e3b34140", background: "#e3b34108", marginBottom: 12 }}>
+        <div style={{ ...S.card, borderColor: "#e3b34140", background: "#e3b34108" }}>
           <div style={{ fontFamily: MONO, fontSize: 11, color: "#e3b341" }}>
-            ⚠ Accept the paper trading agreement in the Auto-Trader tab to enable manual trades.
+            ⚠ Accept the paper trading agreement in the Auto-Trader tab to enable trades.
           </div>
         </div>
       )}
 
-      {/* Wallet snapshot */}
+      {/* Available cash */}
       <div style={S.card}>
         <div style={S.label}>VIRTUAL WALLET</div>
         <div style={S.row}>
-          {[["Portfolio Value", `$${fmt(summary.total_value)}`], ["Available Cash", `$${fmt(summary.available_cash)}`]].map(([l, v]) => (
-            <div key={l} style={S.col}><span style={S.label}>{l}</span><span style={S.val}>{v}</span></div>
+          {[["Portfolio Value", `$${fmt(summary.total_value)}`],
+            ["Available Cash", `$${fmt(availableCash)}`]].map(([l, v]) => (
+            <div key={l} style={S.col}>
+              <span style={S.label}>{l}</span>
+              <span style={S.val}>{v}</span>
+            </div>
           ))}
         </div>
       </div>
 
-      {/* Positions for this symbol */}
-      {myPositions.length > 0 ? (
-        <div>
-          <div style={{ ...S.label, marginBottom: 8 }}>OPEN POSITIONS — {symbol}</div>
-          {myPositions.map(pos => {
-            const lp     = currentPrice ?? pos.current_price ?? 0;
-            const livePnl = lp ? (lp - pos.buy_price) * pos.shares : pos.unrealized_pnl ?? 0;
-            const livePct = pos.buy_price ? ((lp - pos.buy_price) / pos.buy_price) * 100 : pos.unrealized_pnl_pct ?? 0;
-            const slRange = pos.buy_price - pos.stop_loss_price;
-            const slPct   = slRange > 0 ? Math.max(0, Math.min(100, ((lp - pos.stop_loss_price) / slRange) * 100)) : 100;
-            return (
-              <div key={pos.strategy_key} style={S.card}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: "#8b949e", background: "#21262d", padding: "2px 8px", borderRadius: 4 }}>
-                    {strategies[pos.strategy_key]?.config?.label ?? pos.strategy_key}
-                  </span>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontFamily: MONO, fontSize: 16, fontWeight: 700, color: pnlColor(livePnl) }}>
-                      {sign(livePnl)}${Math.abs(livePnl).toFixed(2)}
-                    </div>
-                    <div style={{ fontFamily: MONO, fontSize: 10, color: pnlColor(livePct) }}>
-                      {sign(livePct)}{fmt(livePct)}%
-                    </div>
-                  </div>
-                </div>
-                <div style={S.row}>
-                  {[["Shares", fmt(pos.shares, 4)], ["Bought", `$${fmt(pos.buy_price)}`],
-                    ["Now", `$${fmt(lp)}`], ["Value", `$${fmt(pos.shares * lp)}`],
-                    ["Stop", `$${fmt(pos.stop_loss_price)}`]].map(([l, v]) => (
-                    <div key={l} style={S.col}><span style={S.label}>{l}</span><span style={{ ...S.val, fontSize: 12 }}>{v}</span></div>
-                  ))}
-                </div>
-                <SlBar buyPrice={pos.buy_price} stopPrice={pos.stop_loss_price} currentPrice={lp} />
+      {/* Manual position for this symbol */}
+      {myPosition ? (
+        <div style={S.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <div style={S.label}>YOUR POSITION — {symbol}</div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontFamily: MONO, fontSize: 16, fontWeight: 700, color: pnlColor(livePnl) }}>
+                {sign(livePnl)}${Math.abs(livePnl).toFixed(2)}
               </div>
-            );
-          })}
+              <div style={{ fontFamily: MONO, fontSize: 10, color: pnlColor(livePnlPct) }}>
+                {sign(livePnlPct)}{fmt(livePnlPct)}% unrealized
+              </div>
+            </div>
+          </div>
+          <div style={S.row}>
+            {[["Shares", fmt(myPosition.shares, 4)],
+              ["Avg Buy", `$${fmt(myPosition.avg_buy_price)}`],
+              ["Now", `$${fmt(livePrice)}`],
+              ["Value", `$${fmt(myPosition.shares * livePrice)}`]].map(([l, v]) => (
+              <div key={l} style={S.col}>
+                <span style={S.label}>{l}</span>
+                <span style={{ ...S.val, fontSize: 12 }}>{v}</span>
+              </div>
+            ))}
+          </div>
+          <SlBar avgBuy={myPosition.avg_buy_price} currentPrice={livePrice} />
+          <div style={{ marginTop: 10, fontFamily: MONO, fontSize: 9, color: "#3a4258" }}>
+            ℹ Auto-trader does not manage manual positions — no automatic stop-loss
+          </div>
         </div>
       ) : (
         <div style={{ ...S.card, textAlign: "center", padding: "20px 16px" }}>
           <div style={{ fontFamily: MONO, fontSize: 11, color: "#6e7681", lineHeight: 1.6 }}>
-            No open positions for <strong style={{ color: "#e6edf3" }}>{symbol}</strong>.<br />
-            {allocatedStrats.length > 0 ? "Use manual BUY below." : "Allocate funds to a strategy in the Auto-Trader tab first."}
+            No manual position for <strong style={{ color: "#e6edf3" }}>{symbol}</strong>.<br />
+            Use BUY below to open one from your available cash.
           </div>
         </div>
       )}
@@ -324,28 +417,28 @@ export default function PortfolioTab({ symbol, currentPrice }) {
         <div style={S.card}>
           <div style={S.label}>MANUAL TRADE — {symbol}</div>
           <div style={{ fontSize: 11, color: "#6e7681", fontFamily: MONO, marginBottom: 14, lineHeight: 1.5 }}>
-            Choose a strategy, $ amount or share count. Fractional shares supported.<br />
-            Virtual money only — no real funds.
+            Trades directly from your available cash. Fractional shares supported.<br />
+            The auto-trader will not touch these positions.
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <button
               style={{ padding: "9px 24px", borderRadius: 7, fontFamily: MONO, fontSize: 12, fontWeight: 700,
-                cursor: allocatedStrats.length === 0 ? "not-allowed" : "pointer",
-                opacity: allocatedStrats.length === 0 ? 0.35 : 1,
+                cursor: availableCash < 1 ? "not-allowed" : "pointer",
+                opacity: availableCash < 1 ? 0.35 : 1,
                 background: "#0fffa315", border: "1px solid #0fffa350", color: "#0fffa3" }}
-              disabled={allocatedStrats.length === 0}
-              onClick={() => setConfirm("BUY")}>▲ BUY</button>
+              disabled={availableCash < 1}
+              onClick={() => setModal("buy")}>▲ BUY</button>
             <button
               style={{ padding: "9px 24px", borderRadius: 7, fontFamily: MONO, fontSize: 12, fontWeight: 700,
-                cursor: myPositions.length === 0 ? "not-allowed" : "pointer",
-                opacity: myPositions.length === 0 ? 0.35 : 1,
+                cursor: !myPosition ? "not-allowed" : "pointer",
+                opacity: !myPosition ? 0.35 : 1,
                 background: "#ff416215", border: "1px solid #ff416250", color: "#ff4162" }}
-              disabled={myPositions.length === 0}
-              onClick={() => setConfirm("SELL")}>▼ SELL</button>
+              disabled={!myPosition}
+              onClick={() => setModal("sell")}>▼ SELL</button>
           </div>
-          {allocatedStrats.length === 0 && (
+          {availableCash < 1 && !myPosition && (
             <div style={{ fontFamily: MONO, fontSize: 10, color: "#e3b341", marginTop: 8 }}>
-              Allocate funds to a strategy in the Auto-Trader tab to enable manual trades.
+              No available cash. Sell a position or reduce a strategy allocation.
             </div>
           )}
         </div>

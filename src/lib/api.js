@@ -97,31 +97,40 @@ export function connectPriceStream(onMessage, onClose) {
 }
 
 // ── Portfolio / Auto-Trader ───────────────────────────────────────────────────
-// Add these exports to src/lib/api.js
-export const getPortfolioOverview     = ()               => get("/api/portfolio/overview");
-export const getPortfolioSummary      = ()               => get("/api/portfolio/summary");
-export const getPortfolioPnl          = ()               => get("/api/portfolio/pnl");
-export const getStrategies            = ()               => get("/api/portfolio/strategies");
-export const getPortfolioPositions    = (sk)             => get(`/api/portfolio/positions/${sk}`);
-export const getPortfolioTrades       = (limit=50, sk)   => get(`/api/portfolio/trades?limit=${limit}${sk ? `&strategy=${sk}` : ""}`);
-export const getPortfolioTransactions = (limit=50)       => get(`/api/portfolio/transactions?limit=${limit}`);
- 
-export const portfolioAcceptAgreement = ()               => post("/api/portfolio/agreement");
+// src/lib/api.js — v4 portfolio exports
+// Replace ALL previous portfolio exports with these
+
+// ── Portfolio v4 ──────────────────────────────────────────────────────────────
+export const getPortfolioOverview     = ()             => get("/api/portfolio/overview");
+export const getPortfolioSummary      = ()             => get("/api/portfolio/summary");
+export const getStrategies            = ()             => get("/api/portfolio/strategies");
+export const getPortfolioTransactions = (limit = 50)   => get(`/api/portfolio/transactions?limit=${limit}`);
+
+// Manual trades — no strategy needed
+export const getManualPositions       = ()             => get("/api/portfolio/manual/positions");
+export const getManualTrades          = (limit = 50)   => get(`/api/portfolio/manual/trades?limit=${limit}`);
+export const manualBuy                = (symbol, { amountUsd, shares } = {}) =>
+  post("/api/portfolio/manual/buy", {
+    symbol,
+    ...(amountUsd != null ? { amount_usd: amountUsd } : {}),
+    ...(shares    != null ? { shares }                : {}),
+  });
+export const manualSell               = (symbol, shares = null) =>
+  post("/api/portfolio/manual/sell", { symbol, ...(shares != null ? { shares } : {}) });
+
+// Strategy funds
+export const getStrategyPositions     = (sk)           => get(`/api/portfolio/strategy/${sk}/positions`);
+export const getStrategyTrades        = (sk, limit=50) => get(`/api/portfolio/strategy/${sk}/trades?limit=${limit}`);
+export const portfolioAcceptAgreement = ()             => post("/api/portfolio/agreement");
 export const portfolioAllocate        = (strategy_key, amount, stop_loss_pct) =>
   post("/api/portfolio/allocate", { strategy_key, amount, ...(stop_loss_pct != null ? { stop_loss_pct } : {}) });
 export const portfolioReduce          = (strategy_key, amount) =>
   post("/api/portfolio/reduce", { strategy_key, amount });
 export const portfolioPause           = (strategy_key, paused) =>
   post("/api/portfolio/pause", { strategy_key, paused });
-export const portfolioStop            = (strategy_key)   =>
+export const portfolioStop            = (strategy_key) =>
   post("/api/portfolio/stop", { strategy_key });
-export const portfolioManualTrade     = (symbol, action, strategy_key, { amountUsd, shares } = {}) =>
-  post("/api/portfolio/trade", {
-    symbol, action, strategy_key,
-    ...(amountUsd != null ? { amount_usd: amountUsd } : {}),
-    ...(shares    != null ? { shares }                : {}),
-  });
 
 // Admin
-export const getAutoTraderStatus   = ()          => get("/api/portfolio/admin/status");
-export const setKillSwitch         = (enabled)   => post("/api/portfolio/admin/kill-switch", { enabled });
+export const getAutoTraderStatus      = ()             => get("/api/portfolio/admin/status");
+export const setKillSwitch            = (enabled)      => post("/api/portfolio/admin/kill-switch", { enabled });
