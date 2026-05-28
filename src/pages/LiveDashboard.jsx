@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import NewsTab from "../components/NewsTab";
 import SearchBar from "../components/SearchBar";
-import SignalTab from "../components/SignalTab";    // ← new
+import SignalTab from "../components/SignalTab";
+import PortfolioTab from "../components/PortfolioTab";
 
 const API    = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 const WS_URL = (import.meta.env.VITE_WS_URL || "wss://signalboard.duckdns.org")
@@ -182,6 +183,7 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
     { id: "technical", icon: "⚡", label: "Technical"  },
     { id: "signal",    icon: "🤖", label: "AI Signal"  },  // ← new
     { id: "news",      icon: "📰", label: "News"       },
+    { id: "portfolio", icon: "💼", label: "Portfolio"  },
     { id: "info",      icon: "ℹ️",  label: "Financials" },
   ];
 
@@ -413,6 +415,11 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
                 currentPrice={price?.price}
               />
             </div>
+            {/* ── Portfolio tab ── */}
+            <div style={{ display: innerTab === "portfolio" ? "block" : "none", height: "100%" }}>
+              <PortfolioTab key={selected} symbol={selected} currentPrice={price?.price} />
+            </div>
+
             <div style={{ display: innerTab === "news"      ? "block" : "none", height: "100%" }}>
               <NewsTab symbol={selected} />
             </div>
