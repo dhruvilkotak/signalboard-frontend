@@ -26,18 +26,13 @@ export default function App() {
   const [portfolioValue, setPortfolioValue] = useState(null);
   const { prices, connected } = usePrices();
 
+  // Step 1: wire token into api.js immediately when user is available
   useEffect(() => {
     setTokenGetter(() => auth.user?.getIdToken() ?? Promise.resolve(null));
   }, [auth.user]);
 
-  useEffect(() => {
-    if (!auth.user || auth.isPending) return;
-    getWatchlist()
-      .then(data => setWatchlist(data.symbols || DEFAULT_TICKERS))
-      .catch(() => setWatchlist(DEFAULT_TICKERS));
-  }, [auth.user, auth.isPending]);
-
-  // Portfolio bar — polls every 60s + instant refresh when switching to Auto-Trader tab
+  // Step 2: fetch data — 100ms delay ensures token getter is propagated
+  // before the first authenticated API call fires
   const fetchPortfolioSummary = useCallback(
     () => getPortfolioSummary().then(s => setPortfolioValue(s)).catch(() => {}),
     []
@@ -45,9 +40,16 @@ export default function App() {
 
   useEffect(() => {
     if (!auth.user || auth.isPending) return;
-    fetchPortfolioSummary();
+
+    const timer = setTimeout(() => {
+      getWatchlist()
+        .then(data => setWatchlist(data.symbols || DEFAULT_TICKERS))
+        .catch(() => setWatchlist(DEFAULT_TICKERS));
+      fetchPortfolioSummary();
+    }, 100);  // tiny delay — token getter must propagate before first API call
+
     const iv = setInterval(fetchPortfolioSummary, 60000);
-    return () => clearInterval(iv);
+    return () => { clearTimeout(timer); clearInterval(iv); };
   }, [auth.user, auth.isPending, fetchPortfolioSummary]);
 
   const handleTabChange = (newTab) => {
