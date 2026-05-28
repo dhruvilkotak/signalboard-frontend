@@ -95,3 +95,28 @@ export function connectPriceStream(onMessage, onClose) {
 
   return ws;
 }
+
+// ── Portfolio / Auto-Trader ───────────────────────────────────────────────────
+// Add these exports to src/lib/api.js
+
+export const getPortfolio          = ()          => get("/api/portfolio/");
+export const getPortfolioWallet    = ()          => get("/api/portfolio/wallet");
+export const getPortfolioPositions = ()          => get("/api/portfolio/positions");
+export const getPortfolioPnl       = ()          => get("/api/portfolio/pnl");
+export const getPortfolioTrades    = (limit=50)  => get(`/api/portfolio/trades?limit=${limit}`);
+export const getPortfolioTransactions = (limit=50) => get(`/api/portfolio/transactions?limit=${limit}`);
+export const getStrategies         = ()          => get("/api/portfolio/strategies");
+
+export const portfolioDeposit      = (amount)    => post("/api/portfolio/deposit",  { amount });
+export const portfolioWithdraw     = (amount)    => post("/api/portfolio/withdraw", { amount });
+export const portfolioReset        = ()          => post("/api/portfolio/reset");
+export const portfolioSetStrategy  = (strategy, stop_loss_pct) =>
+  post("/api/portfolio/strategy", { strategy, ...(stop_loss_pct != null ? { stop_loss_pct } : {}) });
+export const portfolioToggle       = (is_active) => post("/api/portfolio/toggle",    { is_active });
+export const portfolioAcceptAgreement = ()       => post("/api/portfolio/agreement");
+export const portfolioManualTrade  = (symbol, action) =>
+  post("/api/portfolio/trade", { symbol, action });
+
+// Admin
+export const getAutoTraderStatus   = ()          => get("/api/portfolio/admin/status");
+export const setKillSwitch         = (enabled)   => post("/api/portfolio/admin/kill-switch", { enabled });

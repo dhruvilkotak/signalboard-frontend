@@ -127,3 +127,157 @@ body {
     --border: #d0d7de; --text1: #1f2328; --text2: #656d76; --text3: #9198a1;
   }
 }
+
+/* ── Auto-Trader page ────────────────────────────────────────────────────── */
+
+/* Paper trading banner */
+.paper-banner {
+  background: #e3b34112; border: 1px solid #e3b34130;
+  color: var(--amber); font-size: 11px; font-family: var(--mono);
+  padding: 6px 14px; border-radius: 7px; margin-bottom: 14px;
+  text-align: center; letter-spacing: 0.3px;
+}
+
+/* Stat grid — row of small label+value pairs */
+.stat-grid { display: flex; gap: 16px; flex-wrap: wrap; }
+.stat-item { display: flex; flex-direction: column; gap: 2px; }
+.stat-label {
+  font-size: 10px; color: var(--text3); font-family: var(--mono);
+  letter-spacing: 0.5px; text-transform: uppercase;
+}
+.stat-value { font-family: var(--mono); font-size: 13px; color: var(--text1); }
+
+/* Summary cards row */
+.summary-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+  gap: 10px; margin-bottom: 16px;
+}
+.summary-card { background: var(--bg1); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+.summary-card .stat-label { margin-bottom: 4px; }
+.summary-card .stat-value { font-size: 17px; font-weight: 700; }
+
+/* Sub-tab bar */
+.sub-tabs { display: flex; gap: 2px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
+.sub-tab {
+  padding: 7px 14px; border: none; border-bottom: 2px solid transparent;
+  background: transparent; color: var(--text3); font-size: 12px;
+  font-family: var(--mono); cursor: pointer; transition: all 0.15s;
+  text-transform: capitalize;
+}
+.sub-tab:hover { color: var(--text2); }
+.sub-tab.active { color: var(--text1); border-bottom-color: var(--blue); }
+
+/* Risk / signal badges */
+.badge {
+  display: inline-flex; align-items: center;
+  font-size: 10px; padding: 2px 8px; border-radius: 4px;
+  font-family: var(--mono); font-weight: 700; white-space: nowrap;
+}
+.badge-buy  { background: #0fffa315; color: var(--signal-buy);  border: 1px solid #0fffa340; }
+.badge-sell { background: #ff416215; color: var(--signal-sell); border: 1px solid #ff416240; }
+.badge-hold { background: #ffd60015; color: var(--signal-hold); border: 1px solid #ffd60040; }
+.badge-high { background: #3fb95015; color: var(--green);  border: 1px solid #3fb95040; }
+.badge-med  { background: #e3b34115; color: var(--amber);  border: 1px solid #e3b34140; }
+.badge-low  { background: #f8514915; color: var(--red);    border: 1px solid #f8514940; }
+.badge-dim  { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
+
+/* Trigger badge */
+.trigger-badge {
+  font-size: 10px; padding: 1px 6px; border-radius: 3px;
+  background: var(--bg3); color: var(--text3);
+  font-family: var(--mono);
+}
+
+/* Position card */
+.position-card { background: var(--bg1); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 10px; }
+.position-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.position-symbol { font-weight: 700; font-size: 15px; font-family: var(--mono); }
+.position-pnl { text-align: right; }
+.position-pnl .main { font-family: var(--mono); font-weight: 700; font-size: 14px; }
+.position-pnl .sub  { font-size: 11px; }
+
+/* Stop-loss proximity bar */
+.sl-bar-wrap { margin-top: 10px; }
+.sl-bar-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--text3); margin-bottom: 3px; }
+.sl-bar-track { height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+.sl-bar-fill  { height: 100%; border-radius: 2px; transition: width 0.4s, background 0.4s; }
+
+/* Trade / transaction row */
+.trade-card { background: var(--bg1); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; }
+.trade-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.trade-meta   { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; }
+.trade-reason { font-size: 11px; color: var(--text3); font-style: italic; margin-top: 4px; }
+
+/* Strategy selector grid */
+.strategy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.strategy-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px; cursor: pointer; transition: all 0.15s;
+}
+.strategy-card:hover { border-color: var(--text3); }
+.strategy-card.selected { border-color: var(--blue); background: #1f6feb12; }
+.strategy-card .name { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+.strategy-card .desc { font-size: 11px; color: var(--text3); line-height: 1.4; margin-bottom: 10px; }
+.strategy-card .universe { margin-top: 8px; font-size: 10px; color: var(--text3); font-family: var(--mono); }
+
+/* Controls row */
+.controls { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+.strategy-badge {
+  display: flex; flex-direction: column; align-items: flex-end;
+  padding: 4px 10px; background: var(--bg2);
+  border: 1px solid var(--border); border-radius: 7px;
+}
+
+/* Overlay / modal */
+.overlay {
+  position: fixed; inset: 0; background: rgba(1,4,9,0.85);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; backdrop-filter: blur(4px);
+}
+.modal {
+  background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 14px; padding: 28px; max-width: 520px; width: 90%;
+  max-height: 90vh; overflow-y: auto;
+}
+.modal-header { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 16px; }
+.modal-title  { font-weight: 700; font-size: 18px; margin-bottom: 2px; }
+.modal-sub    { font-size: 13px; color: var(--text3); }
+.disclaimer {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px; font-size: 13px; color: var(--text2);
+  line-height: 1.6; margin-bottom: 20px;
+}
+
+/* Checkbox row */
+.check-row {
+  display: flex; gap: 12px; align-items: flex-start;
+  cursor: pointer; user-select: none; margin-bottom: 10px;
+}
+.check-box {
+  width: 18px; height: 18px; border-radius: 4px;
+  border: 1px solid var(--border); display: flex;
+  align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px; font-size: 11px;
+  font-weight: 700; background: var(--bg2); transition: all 0.15s;
+}
+.check-box.checked { background: #0fffa315; border-color: #0fffa360; color: var(--signal-buy); }
+.check-row span { font-size: 13px; color: var(--text1); line-height: 1.4; }
+
+/* Sparkline wrapper */
+.sparkline-wrap { margin-top: 10px; overflow-x: auto; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  padding: 8px 20px; border-radius: 8px; font-size: 13px;
+  font-family: var(--mono); z-index: 9999; animation: fadeIn 0.2s ease;
+  white-space: nowrap;
+}
+.toast.ok  { background: #0fffa320; border: 1px solid #0fffa360; color: var(--signal-buy); }
+.toast.err { background: #f8514920; border: 1px solid #f8514960; color: var(--red); }
+
+/* Empty state */
+.empty-state {
+  text-align: center; padding: 40px; color: var(--text3);
+  font-size: 13px; line-height: 1.6;
+}
