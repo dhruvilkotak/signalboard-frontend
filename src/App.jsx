@@ -1,10 +1,9 @@
-// src/App.jsx
-// Root component — auth gate, tab navigation, admin tab for admins
-// v2: portfolio value mini-bar in header (clicks to Auto-Trader tab)
+// src/App.jsx — v3 (portfolio bar uses new getPortfolioSummary)
+// Same as before but uses getPortfolioSummary instead of getPortfolioWallet
 
 import { useState, useEffect, createContext, useContext } from "react";
 import { useAuth } from "./hooks/useAuth";
-import { setTokenGetter, getWatchlist, addToWatchlist, removeFromWatchlist, getPortfolioWallet } from "./lib/api";
+import { setTokenGetter, getWatchlist, addToWatchlist, removeFromWatchlist, getPortfolioSummary } from "./lib/api";
 import { usePrices } from "./hooks/usePrices";
 
 import Login         from "./pages/Login";
@@ -27,12 +26,10 @@ export default function App() {
   const [portfolioValue, setPortfolioValue] = useState(null);
   const { prices, connected } = usePrices();
 
-  // Wire token into api.js
   useEffect(() => {
     setTokenGetter(() => auth.user?.getIdToken() ?? Promise.resolve(null));
   }, [auth.user]);
 
-  // Load watchlist from Firestore after login
   useEffect(() => {
     if (!auth.user || auth.isPending) return;
     getWatchlist()
@@ -40,48 +37,32 @@ export default function App() {
       .catch(() => setWatchlist(DEFAULT_TICKERS));
   }, [auth.user, auth.isPending]);
 
-  // Portfolio value — refresh every 60s for header bar
+  // Portfolio bar — polls summary every 60s
   useEffect(() => {
     if (!auth.user || auth.isPending) return;
-    const fetch = () =>
-      getPortfolioWallet()
-        .then(w => setPortfolioValue(w))
-        .catch(() => {});
+    const fetch = () => getPortfolioSummary().then(s => setPortfolioValue(s)).catch(() => {});
     fetch();
     const iv = setInterval(fetch, 60000);
     return () => clearInterval(iv);
   }, [auth.user, auth.isPending]);
 
-  // Lazy-load Admin page only for admins
   useEffect(() => {
     if (auth.isAdmin && !AdminPage) {
       import("./pages/Admin").then(m => setAdminPage(() => m.default));
     }
   }, [auth.isAdmin]);
 
-  const handleAdd = async (symbol) => {
-    try { const data = await addToWatchlist(symbol); setWatchlist(data.symbols); }
-    catch (e) { console.error(e); }
+  const handleAdd    = async (sym) => {
+    try { const d = await addToWatchlist(sym); setWatchlist(d.symbols); } catch {}
+  };
+  const handleRemove = async (sym) => {
+    try { const d = await removeFromWatchlist(sym); setWatchlist(d.symbols); } catch {}
   };
 
-  const handleRemove = async (symbol) => {
-    try { const data = await removeFromWatchlist(symbol); setWatchlist(data.symbols); }
-    catch (e) { console.error(e); }
-  };
-
-  if (auth.user === undefined) {
-    return (
-      <div style={splash}>
-        <span style={splashText}>SignalBoard</span>
-        <span style={splashSub}>Loading…</span>
-      </div>
-    );
-  }
-
-  if (!auth.user) {
-    return <Login onLogin={auth.loginEmail} onGoogle={auth.loginGoogle} error={auth.error} loading={auth.loading} />;
-  }
-
+  if (auth.user === undefined) return (
+    <div style={splash}><span style={splashText}>SignalBoard</span><span style={splashSub}>Loading…</span></div>
+  );
+  if (!auth.user) return <Login onLogin={auth.loginEmail} onGoogle={auth.loginGoogle} error={auth.error} loading={auth.loading} />;
   if (auth.isPending) return <PendingScreen user={auth.user} />;
 
   const TABS = [
@@ -92,35 +73,28 @@ export default function App() {
     ...(auth.isAdmin ? [{ id: "admin", label: "⚙ Admin" }] : []),
   ];
 
-  const pnl    = portfolioValue?.total_pnl     ?? 0;
-  const pnlPct = portfolioValue?.total_pnl_pct ?? 0;
-  const tv     = portfolioValue?.total_value   ?? 0;
+  const tv     = portfolioValue?.total_value    ?? 0;
+  const avail  = portfolioValue?.available_cash ?? 0;
 
   return (
     <AuthContext.Provider value={auth}>
       <div style={appWrap}>
-
-        {/* Header */}
         <header style={header}>
           <span style={logoText}>SignalBoard</span>
-
           <div style={headerRight}>
-            {/* ── Portfolio mini bar — always visible, clicks to Auto-Trader ── */}
+            {/* Portfolio mini bar */}
             {portfolioValue && (
-              <button onClick={() => setTab("trader")} style={portfolioBar}>
+              <button onClick={() => setTab("trader")} style={portfolioBar} title="Click to open Auto-Trader">
                 <span style={{ fontSize: 12 }}>💼</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", fontFamily: "'Space Mono',monospace" }}>
                   ${tv.toFixed(2)}
                 </span>
-                <span style={{ fontSize: 11, fontFamily: "'Space Mono',monospace", color: pnl >= 0 ? "#3fb950" : "#f85149" }}>
-                  {pnl >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%
+                <span style={{ fontSize: 10, color: "#6e7681", fontFamily: "'Space Mono',monospace" }}>
+                  Cash: ${avail.toFixed(0)}
                 </span>
-                <span style={{ fontSize: 9, color: "#6e7681", fontFamily: "'Space Mono',monospace" }}>
-                  PAPER
-                </span>
+                <span style={{ fontSize: 9, color: "#6e7681", fontFamily: "'Space Mono',monospace" }}>PAPER</span>
               </button>
             )}
-
             <span style={wsStatus}>{connected ? "🟢 Live" : "🔴 Offline"}</span>
             {auth.idleWarning && (
               <span style={{ fontSize:11, color:"#f0a000", background:"#f0a00015", border:"1px solid #f0a00040", borderRadius:4, padding:"2px 8px" }}>
@@ -133,33 +107,27 @@ export default function App() {
           </div>
         </header>
 
-        {/* Tab bar */}
         <nav style={tabBar}>
           {TABS.map(t => (
-            <button
-              key={t.id}
-              style={{ ...tabBtn, ...(tab === t.id ? tabBtnActive : {}) }}
-              onClick={() => setTab(t.id)}
-            >{t.label}</button>
+            <button key={t.id} style={{ ...tabBtn, ...(tab === t.id ? tabBtnActive : {}) }} onClick={() => setTab(t.id)}>
+              {t.label}
+            </button>
           ))}
         </nav>
 
-        {/* Page content */}
         <main style={main}>
           {tab === "prices"  && <LiveDashboard watchlist={watchlist} onAdd={handleAdd} onRemove={handleRemove} prices={prices} />}
           {tab === "signals" && <Signals watchlist={watchlist} />}
-          {tab === "trader"  && <Trader watchlist={watchlist} onPortfolioUpdate={setPortfolioValue} />}
+          {tab === "trader"  && <Trader onPortfolioUpdate={setPortfolioValue} />}
           {tab === "chat"    && <Chat watchlist={watchlist} />}
           {tab === "admin"   && auth.isAdmin && AdminPage && <AdminPage />}
           {tab === "admin"   && !auth.isAdmin && <div style={denied}>Access denied.</div>}
         </main>
-
       </div>
     </AuthContext.Provider>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const splash       = { minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", background:"#0d1117" };
 const splashText   = { fontSize:28, fontWeight:700, color:"#e6edf3", letterSpacing:"-0.5px" };
 const splashSub    = { fontSize:14, color:"#8b949e", marginTop:8 };
@@ -176,9 +144,4 @@ const tabBtn       = { padding:"10px 16px", border:"none", borderBottom:"2px sol
 const tabBtnActive = { color:"#e6edf3", borderBottomColor:"#2ea043" };
 const main         = { flex:1, overflow:"auto", padding:"1.5rem" };
 const denied       = { color:"#f85149", padding:"2rem", fontSize:14 };
-const portfolioBar = {
-  display:"flex", alignItems:"center", gap:6,
-  background:"#0d1117", border:"1px solid #30363d",
-  borderRadius:7, padding:"4px 12px", cursor:"pointer",
-  transition:"border-color 0.15s",
-};
+const portfolioBar = { display:"flex", alignItems:"center", gap:6, background:"#0d1117", border:"1px solid #30363d", borderRadius:7, padding:"4px 12px", cursor:"pointer", transition:"border-color 0.15s" };
