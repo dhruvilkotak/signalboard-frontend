@@ -15,27 +15,42 @@ async function authHeaders() {
     : { "Content-Type": "application/json" };
 }
 
+// ── Dev logging (only in development) ────────────────────────────────────────
+const IS_DEV = import.meta.env.DEV;
+function apiLog(method, path, status, ok) {
+  if (!IS_DEV) return;
+  const style = ok ? "color:#3fb950" : "color:#f85149";
+  console.log(`%c[API] ${method} ${path} → ${status}`, style);
+}
+
 async function get(path) {
-  const res = await fetch(`${API}${path}`, { headers: await authHeaders() });
+  const headers = await authHeaders();
+  const hasToken = !!headers.Authorization;
+  if (IS_DEV && !hasToken) console.warn(`[API] GET ${path} — no auth token`);
+  const res = await fetch(`${API}${path}`, { headers });
+  apiLog("GET", path, res.status, res.ok);
   if (!res.ok) throw new Error(`GET ${path} → ${res.status}`);
   return res.json();
 }
 
 async function post(path, body) {
+  const headers = await authHeaders();
+  const hasToken = !!headers.Authorization;
+  if (IS_DEV && !hasToken) console.warn(`[API] POST ${path} — no auth token`);
   const res = await fetch(`${API}${path}`, {
     method: "POST",
-    headers: await authHeaders(),
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
+  apiLog("POST", path, res.status, res.ok);
   if (!res.ok) throw new Error(`POST ${path} → ${res.status}`);
   return res.json();
 }
 
 async function del(path) {
-  const res = await fetch(`${API}${path}`, {
-    method: "DELETE",
-    headers: await authHeaders(),
-  });
+  const headers = await authHeaders();
+  const res = await fetch(`${API}${path}`, { method: "DELETE", headers });
+  apiLog("DELETE", path, res.status, res.ok);
   if (!res.ok) throw new Error(`DELETE ${path} → ${res.status}`);
   return res.json();
 }

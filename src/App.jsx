@@ -30,10 +30,10 @@ export default function App() {
   // so it's available synchronously. No race condition with API calls.
   useEffect(() => {
     if (auth.token) {
-      // Token is already available — set it synchronously
+      console.log("[Auth] Token ready — wiring into api.js");
       setTokenGetter(() => Promise.resolve(auth.token));
     } else {
-      // Fallback: call getIdToken() for token refresh cases
+      console.log("[Auth] No token — using getIdToken() fallback");
       setTokenGetter(() => auth.user?.getIdToken() ?? Promise.resolve(null));
     }
   }, [auth.token, auth.user]);
@@ -46,7 +46,11 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (!auth.user || auth.isPending) return;
+    // Depend on auth.token (not auth.user) so this effect fires AFTER
+    // the token-setter effect above — guaranteeing the Bearer token
+    // is wired into api.js before any authenticated API call fires.
+    if (!auth.token || auth.isPending) return;
+    console.log("[Auth] Token confirmed — loading watchlist + portfolio");
 
     getWatchlist()
       .then(data => setWatchlist(data.symbols || DEFAULT_TICKERS))
@@ -55,7 +59,7 @@ export default function App() {
 
     const iv = setInterval(fetchPortfolioSummary, 60000);
     return () => clearInterval(iv);
-  }, [auth.user, auth.isPending, fetchPortfolioSummary]);
+  }, [auth.token, auth.isPending, fetchPortfolioSummary]);
 
   const handleTabChange = (newTab) => {
     setTab(newTab);
