@@ -1,7 +1,7 @@
 // src/App.jsx — v3 (portfolio bar uses new getPortfolioSummary)
 // Same as before but uses getPortfolioSummary instead of getPortfolioWallet
 
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect, useCallback, createContext, useContext } from "react";
 import { useAuth } from "./hooks/useAuth";
 import { setTokenGetter, getWatchlist, addToWatchlist, removeFromWatchlist, getPortfolioSummary } from "./lib/api";
 import { usePrices } from "./hooks/usePrices";
@@ -37,14 +37,23 @@ export default function App() {
       .catch(() => setWatchlist(DEFAULT_TICKERS));
   }, [auth.user, auth.isPending]);
 
-  // Portfolio bar — polls summary every 60s
+  // Portfolio bar — polls every 60s + instant refresh when switching to Auto-Trader tab
+  const fetchPortfolioSummary = useCallback(
+    () => getPortfolioSummary().then(s => setPortfolioValue(s)).catch(() => {}),
+    []
+  );
+
   useEffect(() => {
     if (!auth.user || auth.isPending) return;
-    const fetch = () => getPortfolioSummary().then(s => setPortfolioValue(s)).catch(() => {});
-    fetch();
-    const iv = setInterval(fetch, 60000);
+    fetchPortfolioSummary();
+    const iv = setInterval(fetchPortfolioSummary, 60000);
     return () => clearInterval(iv);
-  }, [auth.user, auth.isPending]);
+  }, [auth.user, auth.isPending, fetchPortfolioSummary]);
+
+  const handleTabChange = (newTab) => {
+    setTab(newTab);
+    if (newTab === "trader") fetchPortfolioSummary(); // instant header refresh on trader tab
+  };
 
   useEffect(() => {
     if (auth.isAdmin && !AdminPage) {
@@ -84,7 +93,7 @@ export default function App() {
           <div style={headerRight}>
             {/* Portfolio mini bar */}
             {portfolioValue && (
-              <button onClick={() => setTab("trader")} style={portfolioBar} title="Click to open Auto-Trader">
+              <button onClick={() => handleTabChange("trader")} style={portfolioBar} title="Click to open Auto-Trader">
                 <span style={{ fontSize: 12 }}>💼</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", fontFamily: "'Space Mono',monospace" }}>
                   ${tv.toFixed(2)}
@@ -109,7 +118,7 @@ export default function App() {
 
         <nav style={tabBar}>
           {TABS.map(t => (
-            <button key={t.id} style={{ ...tabBtn, ...(tab === t.id ? tabBtnActive : {}) }} onClick={() => setTab(t.id)}>
+            <button key={t.id} style={{ ...tabBtn, ...(tab === t.id ? tabBtnActive : {}) }} onClick={() => handleTabChange(t.id)}>
               {t.label}
             </button>
           ))}
