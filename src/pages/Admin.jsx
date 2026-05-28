@@ -10,6 +10,7 @@ import {
 import { db } from "../lib/firebase";
 import { useAuthContext } from "../App";
 import { auth } from "../lib/firebase";
+import { getAutoTraderStatus, setKillSwitch } from "../lib/api";
 
 const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 
@@ -39,6 +40,7 @@ export default function Admin() {
           { id: "invites", label: "📨 Invites" },
           { id: "tickers", label: "📈 Signal Tickers" },
           { id: "links",   label: "🔗 Quick Links" },
+          { id: "autotrader", label: "🤖 Auto-Trader" },
         ].map(t => (
           <button
             key={t.id}
@@ -53,6 +55,7 @@ export default function Admin() {
         {activeTab === "invites" && <InviteManager />}
         {activeTab === "tickers" && <TickerManager />}
         {activeTab === "links"   && <QuickLinks />}
+        {activeTab === "autotrader" && <AutoTraderAdmin />}
       </div>
     </div>
   );
@@ -368,6 +371,151 @@ function QuickLinks() {
             <span style={{ fontSize: 11, color: "#8b949e" }}>↗</span>
           </a>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ── NEW COMPONENT — paste at bottom of Admin.jsx ─────────────────────────────
+function AutoTraderAdmin() {
+  const [status,  setStatus]  = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [acting,  setActing]  = useState(false);
+  const [msg,     setMsg]     = useState(null);
+ 
+  useEffect(() => { load(); }, []);
+ 
+  async function load() {
+    setLoading(true);
+    try {
+      const s = await getAutoTraderStatus();
+      setStatus(s);
+    } catch (e) {
+      setMsg({ type: "error", text: `Failed to load status: ${e.message}` });
+    } finally {
+      setLoading(false);
+    }
+  }
+ 
+  async function toggle(enabled) {
+    if (!confirm(`${enabled ? "Enable" : "Disable"} autonomous trading for ALL users?`)) return;
+    setActing(true);
+    try {
+      await setKillSwitch(enabled);
+      await load();
+      setMsg({ type: "success", text: `Auto-trader ${enabled ? "enabled" : "disabled"} globally.` });
+    } catch (e) {
+      setMsg({ type: "error", text: `Failed: ${e.message}` });
+    } finally {
+      setActing(false);
+    }
+  }
+ 
+  if (loading) return <div style={empty}>Loading…</div>;
+ 
+  const isEnabled = status?.enabled ?? true;
+ 
+  return (
+    <div>
+      <p style={helpText}>
+        Global kill switch for all autonomous trading. When disabled, no new positions
+        are opened and no stop-losses are triggered for any user. Existing positions
+        are held. Takes effect within 60 seconds (next scheduler cycle).
+      </p>
+ 
+      {msg && (
+        <div style={{
+          padding:"10px 14px", borderRadius:6, fontSize:13, marginBottom:16,
+          display:"flex", alignItems:"center", justifyContent:"space-between", gap:12,
+          background: msg.type === "success" ? "#0d2e1a" : "#3d1515",
+          border: `1px solid ${msg.type === "success" ? "#3fb950" : "#f85149"}`,
+          color: msg.type === "success" ? "#3fb950" : "#f85149",
+        }}>
+          <span>{msg.text}</span>
+          <button style={{ background:"none", border:"none", color:"inherit", cursor:"pointer", fontSize:16, padding:0 }}
+            onClick={() => setMsg(null)}>✕</button>
+        </div>
+      )}
+ 
+      {/* Status card */}
+      <div style={{ background:"#0d1117", border:"1px solid #30363d", borderRadius:10, padding:"1.5rem", marginBottom:16 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+          <div>
+            <div style={{ fontSize:15, fontWeight:600, color:"#e6edf3", marginBottom:4 }}>
+              Autonomous Trading
+            </div>
+            <div style={{ fontSize:12, color:"#8b949e" }}>
+              {isEnabled
+                ? "Active — signals are being auto-traded for all active users"
+                : "Disabled — no autonomous trades will execute"}
+            </div>
+          </div>
+          <div style={{
+            padding:"6px 14px", borderRadius:20, fontWeight:700, fontSize:13,
+            background: isEnabled ? "#0d2e1a" : "#3d1515",
+            color: isEnabled ? "#3fb950" : "#f85149",
+            border: `1px solid ${isEnabled ? "#3fb950" : "#f85149"}`,
+          }}>
+            {isEnabled ? "● ENABLED" : "○ DISABLED"}
+          </div>
+        </div>
+ 
+        <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
+          <div>
+            <div style={{ fontSize:10, color:"#6e7681", fontFamily:"monospace", textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>Active Users</div>
+            <div style={{ fontSize:24, fontWeight:700, color:"#58a6ff", fontFamily:"monospace" }}>
+              {status?.active_users ?? "—"}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize:10, color:"#6e7681", fontFamily:"monospace", textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>Last Checked</div>
+            <div style={{ fontSize:13, color:"#8b949e", fontFamily:"monospace" }}>
+              {status?.timestamp ? new Date(status.timestamp).toLocaleTimeString() : "—"}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize:10, color:"#6e7681", fontFamily:"monospace", textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>Stop-Loss Monitor</div>
+            <div style={{ fontSize:13, color:"#8b949e", fontFamily:"monospace" }}>Every 60s</div>
+          </div>
+        </div>
+      </div>
+ 
+      {/* Controls */}
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+        <button
+          style={{ padding:"9px 20px", borderRadius:6, fontSize:13, fontWeight:600,
+            cursor: acting ? "not-allowed" : "pointer", opacity: acting ? 0.5 : 1,
+            background:"#238636", border:"1px solid #2ea043", color:"#fff" }}
+          onClick={() => toggle(true)}
+          disabled={acting || isEnabled}
+        >
+          ▶ Enable Auto-Trading
+        </button>
+        <button
+          style={{ padding:"9px 20px", borderRadius:6, fontSize:13, fontWeight:600,
+            cursor: acting ? "not-allowed" : "pointer", opacity: acting ? 0.5 : 1,
+            background:"transparent", border:"1px solid #f8514960", color:"#f85149" }}
+          onClick={() => toggle(false)}
+          disabled={acting || !isEnabled}
+        >
+          ⏸ Disable Auto-Trading
+        </button>
+        <button
+          style={{ padding:"9px 14px", borderRadius:6, fontSize:13,
+            background:"#161b22", border:"1px solid #30363d", color:"#8b949e", cursor:"pointer" }}
+          onClick={load}
+          disabled={loading}
+        >
+          ↻ Refresh
+        </button>
+      </div>
+ 
+      <div style={{ marginTop:16, padding:"10px 14px", background:"#161b22",
+        border:"1px solid #30363d", borderRadius:8, fontSize:12, color:"#8b949e", lineHeight:1.6 }}>
+        <strong style={{ color:"#e6edf3" }}>Kill switch levels:</strong><br />
+        This toggle sets <code style={{ background:"#21262d", padding:"1px 4px", borderRadius:3 }}>config/autotrader.enabled</code> in Firestore.
+        Takes effect within 60s (next scheduler cycle). No redeploy required.<br />
+        For immediate full stop: use the VM kill switch in GCP Console (Quick Links tab).
       </div>
     </div>
   );
