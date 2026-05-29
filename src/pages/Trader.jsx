@@ -195,7 +195,8 @@ function ReduceModal({ cfg, allocation, onConfirm, onCancel, loading }) {
 
 // ── Manual position card ──────────────────────────────────────────────────────
 function ManualPositionCard({ pos, prices = {} }) {
-  const livePrice = prices[pos.symbol] ?? pos.current_price ?? pos.avg_buy_price ?? 0;
+  const priceData = prices[pos.symbol];
+  const livePrice = (typeof priceData === 'object' ? priceData?.price : priceData) ?? pos.current_price ?? pos.avg_buy_price ?? 0;
   const shares    = pos.shares ?? 0;
   const abp       = pos.avg_buy_price ?? pos.buy_price ?? 0;
   const liveValue = livePrice * shares;
@@ -230,7 +231,8 @@ function ManualPositionCard({ pos, prices = {} }) {
 // ── Strategy position card ────────────────────────────────────────────────────
 function StrategyPositionCard({ pos, prices = {} }) {
   // Use live WebSocket price if available, fall back to stored price
-  const livePrice = prices[pos.symbol] ?? pos.current_price ?? pos.buy_price;
+  const priceData = prices[pos.symbol];
+  const livePrice = (typeof priceData === 'object' ? priceData?.price : priceData) ?? pos.current_price ?? pos.buy_price;
   const shares    = pos.shares ?? 0;
   const bp        = pos.buy_price ?? 0;
   const liveValue = livePrice * shares;
