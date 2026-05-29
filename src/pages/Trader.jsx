@@ -194,9 +194,13 @@ function ReduceModal({ cfg, allocation, onConfirm, onCancel, loading }) {
 }
 
 // ── Manual position card ──────────────────────────────────────────────────────
-function ManualPositionCard({ pos }) {
-  const pnl     = pos.unrealized_pnl ?? 0;
-  const pnlPct  = pos.unrealized_pnl_pct ?? 0;
+function ManualPositionCard({ pos, prices = {} }) {
+  const livePrice = prices[pos.symbol] ?? pos.current_price ?? pos.avg_buy_price ?? 0;
+  const shares    = pos.shares ?? 0;
+  const abp       = pos.avg_buy_price ?? pos.buy_price ?? 0;
+  const liveValue = livePrice * shares;
+  const pnl       = abp > 0 ? liveValue - (abp * shares) : (pos.unrealized_pnl ?? 0);
+  const pnlPct    = abp > 0 ? ((livePrice - abp) / abp) * 100 : (pos.unrealized_pnl_pct ?? 0);
   return (
     <div className="position-card fade-in">
       <div className="position-header">
@@ -211,7 +215,7 @@ function ManualPositionCard({ pos }) {
       </div>
       <div className="stat-grid">
         {[["Shares", fmt(pos.shares, 4)], ["Avg Buy", `$${fmt(pos.avg_buy_price)}`],
-          ["Now", `$${fmt(pos.current_price)}`], ["Value", `$${fmt(pos.current_value)}`]
+          ["Now", `$${fmt(livePrice)}`], ["Value", `$${fmt(liveValue)}`]
         ].map(([l, v]) => (
           <div key={l} className="stat-item">
             <span className="stat-label">{l}</span>
@@ -224,12 +228,17 @@ function ManualPositionCard({ pos }) {
 }
 
 // ── Strategy position card ────────────────────────────────────────────────────
-function StrategyPositionCard({ pos }) {
-  const pnl    = pos.unrealized_pnl ?? 0;
-  const pnlPct = pos.unrealized_pnl_pct ?? 0;
-  const slRange = pos.buy_price - pos.stop_loss_price;
-  const slPct   = slRange > 0
-    ? Math.max(0, Math.min(100, ((pos.current_price - pos.stop_loss_price) / slRange) * 100))
+function StrategyPositionCard({ pos, prices = {} }) {
+  // Use live WebSocket price if available, fall back to stored price
+  const livePrice = prices[pos.symbol] ?? pos.current_price ?? pos.buy_price;
+  const shares    = pos.shares ?? 0;
+  const bp        = pos.buy_price ?? 0;
+  const liveValue = livePrice * shares;
+  const pnl       = bp > 0 ? liveValue - (bp * shares) : (pos.unrealized_pnl ?? 0);
+  const pnlPct    = bp > 0 ? ((livePrice - bp) / bp) * 100 : (pos.unrealized_pnl_pct ?? 0);
+  const slRange   = livePrice - (pos.stop_loss_price ?? 0);
+  const slPct     = slRange > 0
+    ? Math.max(0, Math.min(100, ((livePrice - (pos.stop_loss_price ?? 0)) / (bp - (pos.stop_loss_price ?? 0))) * 100))
     : 100;
   return (
     <div className="position-card fade-in">
@@ -245,7 +254,7 @@ function StrategyPositionCard({ pos }) {
       </div>
       <div className="stat-grid">
         {[["Shares", fmt(pos.shares, 4)], ["Bought", `$${fmt(pos.buy_price)}`],
-          ["Now", `$${fmt(pos.current_price)}`], ["Value", `$${fmt(pos.current_value)}`],
+          ["Now", `$${fmt(livePrice)}`], ["Value", `$${fmt(liveValue)}`],
           ["Stop-Loss", `$${fmt(pos.stop_loss_price)}`]].map(([l, v]) => (
           <div key={l} className="stat-item">
             <span className="stat-label">{l}</span>
@@ -363,7 +372,7 @@ function StrategyCard({ sk, cfg, allocation, onAction, selected, onSelect }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function Trader({ onPortfolioUpdate }) {
+export default function Trader({ onPortfolioUpdate, prices = {} }) {
   const [overview,      setOverview]      = useState(null);
   const [manualTrades,  setManualTrades]  = useState([]);
   const [stratTrades,   setStratTrades]   = useState([]);
@@ -588,7 +597,7 @@ export default function Trader({ onPortfolioUpdate }) {
                 (selectedData?.positions ?? []).length === 0
                   ? <div className="empty-state">No open positions in {selectedCfg.label}.</div>
                   : (selectedData?.positions ?? []).map(p => (
-                    <StrategyPositionCard key={`${p.symbol}_${p.strategy_key}`} pos={p} />
+                    <StrategyPositionCard key={`${p.symbol}_${p.strategy_key}`} pos={p} prices={prices} />
                   ))
               )}
               {stratTab === "trades" && <TradeHistoryTab trades={stratTrades} />}
@@ -641,7 +650,7 @@ export default function Trader({ onPortfolioUpdate }) {
                   {" "}{sign(manual.total_pnl)}${fmt(Math.abs(manual.total_pnl ?? 0))} P&L
                 </span>
               </div>
-              {(manual.positions ?? []).map(p => <ManualPositionCard key={p.symbol} pos={p} />)}
+              {(manual.positions ?? []).map(p => <ManualPositionCard key={p.symbol} pos={p} prices={prices} />)}
             </div>
           )}
 

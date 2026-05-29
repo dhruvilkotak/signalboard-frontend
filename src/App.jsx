@@ -144,7 +144,7 @@ export default function App() {
         <main style={main}>
           {tab === "prices"  && <LiveDashboard watchlist={watchlist} onAdd={handleAdd} onRemove={handleRemove} prices={prices} tokenReady={tokenReady} />}
           {tab === "signals" && <Signals watchlist={watchlist} />}
-          {tab === "trader"  && <Trader onPortfolioUpdate={setPortfolioValue} tokenReady={tokenReady} />}
+          {tab === "trader"  && <Trader onPortfolioUpdate={setPortfolioValue} tokenReady={tokenReady} prices={prices} />}
           {tab === "chat"    && <Chat watchlist={watchlist} />}
           {tab === "admin"   && auth.isAdmin && AdminPage && <AdminPage />}
           {tab === "admin"   && !auth.isAdmin && <div style={denied}>Access denied.</div>}
