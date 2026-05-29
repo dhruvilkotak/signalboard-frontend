@@ -551,7 +551,7 @@ function AdminScanPanel({ onDone }) {
     setLoading(true); setErr(null); setResult(null);
     try {
       const token = await getToken();
-      const res = await fetch(`${API}/api/signals/run-all`, {
+      const res = await fetch(`${API}/api/signals/run-all?force=true`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -562,7 +562,8 @@ function AdminScanPanel({ onDone }) {
       const data = await res.json();
       setResult(data);
       setLastRun(new Date());
-      onDone(data.signals || {});
+      // Small delay to let Firestore writes propagate before reloading feed
+      setTimeout(() => onDone(data.signals || {}), 1500);
     } catch (e) {
       setErr(e.message);
     } finally {
