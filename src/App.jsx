@@ -12,6 +12,7 @@ import PendingScreen from "./pages/PendingScreen";
 import Signals       from "./pages/Signals";
 import Trader        from "./pages/Trader";
 import Chat          from "./pages/Chat";
+import UserGuide     from "./pages/UserGuide";
 
 // Wire Firebase auth into api.js immediately — eliminates token race condition
 setFirebaseAuth(firebaseAuth);
@@ -96,6 +97,7 @@ export default function App() {
     { id: "signals", label: "AI Signals"  },
     { id: "trader",  label: "Auto-Trader" },
     { id: "chat",    label: "AI Chat"     },
+    { id: "guide",   label: "📖 Guide"    },
     ...(auth.isAdmin ? [{ id: "admin", label: "⚙ Admin" }] : []),
   ];
 
@@ -144,8 +146,9 @@ export default function App() {
         <main style={main}>
           {tab === "prices"  && <LiveDashboard watchlist={watchlist} onAdd={handleAdd} onRemove={handleRemove} prices={prices} tokenReady={tokenReady} />}
           {tab === "signals" && <Signals watchlist={watchlist} />}
-          {tab === "trader"  && <Trader onPortfolioUpdate={setPortfolioValue} tokenReady={tokenReady} prices={prices} />}
+          {tab === "trader"  && <Trader onPortfolioUpdate={setPortfolioValue} tokenReady={tokenReady} />}
           {tab === "chat"    && <Chat watchlist={watchlist} />}
+          {tab === "guide"   && <UserGuide />}
           {tab === "admin"   && auth.isAdmin && AdminPage && <AdminPage />}
           {tab === "admin"   && !auth.isAdmin && <div style={denied}>Access denied.</div>}
         </main>
