@@ -30,15 +30,17 @@ function fmtPct(n)       { return n == null ? "—" : `${n >= 0 ? "+" : ""}${Num
 function cacheStatus(signal) {
   if (!signal?.generated_at || !signal?.expires_at) return null;
   try {
-    const gen     = new Date(signal.generated_at);
-    const exp     = new Date(signal.expires_at);
-    const nowMs   = Date.now();
-    const ageMs   = nowMs - gen.getTime();
-    const leftMs  = exp.getTime() - nowMs;
+    const gen    = new Date(signal.generated_at);
+    const exp    = new Date(signal.expires_at);
+    const nowMs  = Date.now();
+    const ageMs  = nowMs - gen.getTime();
+    const leftMs = exp.getTime() - nowMs;
 
-    const ageStr  = ageMs < 3600000
+    const ageStr = ageMs < 60000
+      ? "just now"
+      : ageMs < 3600000
       ? `${Math.floor(ageMs / 60000)}m ago`
-      : `${Math.floor(ageMs / 3600000)}h ago`;
+      : `${Math.floor(ageMs / 3600000)}h ${Math.floor((ageMs % 3600000) / 60000)}m ago`;
 
     const leftStr = leftMs <= 0
       ? "expired"
@@ -46,7 +48,24 @@ function cacheStatus(signal) {
       ? `${Math.floor(leftMs / 60000)}m`
       : `${Math.floor(leftMs / 3600000)}h`;
 
-    return { ageStr, leftStr, expired: leftMs <= 0 };
+    // Stale = older than 2 hours during market hours
+    const isMarketHours = (() => {
+      const et   = new Date(nowMs).toLocaleString("en-US", { timeZone: "America/New_York" });
+      const h    = new Date(et).getHours();
+      return h >= 9 && h < 16;
+    })();
+    const isStale = isMarketHours && ageMs > 7200000; // >2h during market hours
+
+    const session = signal.session || "";
+    const sessionLabel = {
+      pre_market:  "Pre-Market",
+      market:      "Market Hours",
+      post_market: "Post-Market",
+      closed:      "After Hours",
+      on_demand:   "On Demand",
+    }[session] || session;
+
+    return { ageStr, leftStr, expired: leftMs <= 0, isStale, sessionLabel };
   } catch { return null; }
 }
 
@@ -187,22 +206,42 @@ export default function SignalTab({ symbol, currentPrice }) {
 
       {/* ── Cache status bar ── */}
       <div style={{
-        display: "flex", alignItems: "center", gap: 8,
-        marginBottom: 16, padding: "5px 10px",
-        background: "#161b22", borderRadius: 6, border: "1px solid #21262d",
+        marginBottom: 12, borderRadius: 6, overflow: "hidden",
+        border: `1px solid ${cache?.isStale ? "#e3b34140" : cache?.expired ? "#f8514940" : "#21262d"}`,
       }}>
         <div style={{
-          width: 6, height: 6, borderRadius: "50%",
-          background: cache?.expired ? "#f85149" : "#3fb950",
-        }} />
-        <span style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e" }}>
-          Signal generated {cache?.ageStr} · shared across all users
-        </span>
-        <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: 9,
-          color: cache?.expired ? "#f85149" : "#6e7681",
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "5px 10px",
+          background: cache?.isStale ? "#e3b34108" : cache?.expired ? "#f8514908" : "#161b22",
         }}>
-          {cache?.expired ? "expired — refreshing next visit" : `valid for ${cache?.leftStr}`}
-        </span>
+          <div style={{
+            width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+            background: cache?.expired ? "#f85149" : cache?.isStale ? "#e3b341" : "#3fb950",
+          }} />
+          <span style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e" }}>
+            Generated {cache?.ageStr}
+            {cache?.sessionLabel ? ` · ${cache.sessionLabel}` : ""}
+            {" · shared across all users"}
+          </span>
+          <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: 9,
+            color: cache?.expired ? "#f85149" : cache?.isStale ? "#e3b341" : "#6e7681",
+            flexShrink: 0,
+          }}>
+            {cache?.expired
+              ? "expired — refreshing"
+              : `valid for ${cache?.leftStr}`}
+          </span>
+        </div>
+        {/* Staleness warning */}
+        {cache?.isStale && !cache?.expired && (
+          <div style={{
+            padding: "4px 10px", background: "#e3b34110",
+            fontFamily: MONO, fontSize: 9, color: "#e3b341",
+            borderTop: "1px solid #e3b34120",
+          }}>
+            ⚠ Signal is {cache.ageStr} old — market may have moved. Click to refresh.
+          </div>
+        )}
       </div>
 
       {/* ── Signal header card ── */}
@@ -297,7 +336,7 @@ export default function SignalTab({ symbol, currentPrice }) {
         borderTop: "1px solid #21262d", paddingTop: 10, marginTop: 4,
       }}>
         ⚠ AI-generated signal for informational purposes only. Not financial advice.
-        Signal is shared across all users and refreshes every 24 hours.
+        Signal is shared across all users. Refreshes each market session (pre-market/market/post-market).
       </div>
     </div>
   );

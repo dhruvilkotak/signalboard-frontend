@@ -6,7 +6,7 @@ import { useState, useRef } from "react";
 
 const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 
-export default function SearchBar({ watchlist = [], onAdd }) {
+export default function SearchBar({ watchlist = [], onAdd, limit = 25 }) {
   const [query,   setQuery]   = useState("");
   const [results, setResults] = useState([]);
   const [open,    setOpen]    = useState(false);
@@ -35,7 +35,10 @@ export default function SearchBar({ watchlist = [], onAdd }) {
     timerRef.current = setTimeout(() => search(val), 220);
   };
 
+  const atLimit = watchlist.length >= limit;
+
   const handleAdd = (symbol) => {
+    if (atLimit) return;
     onAdd(symbol);
     setQuery("");
     setResults([]);
@@ -52,10 +55,16 @@ export default function SearchBar({ watchlist = [], onAdd }) {
           onChange={handleChange}
           onFocus={() => results.length > 0 && setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 200)}
-          placeholder="Search stocks, ETFs, crypto…"
-          style={input}
+          placeholder={atLimit ? `Watchlist full (${limit}/${limit})` : "Search stocks, ETFs, crypto…"}
+          disabled={atLimit}
+          style={{ ...input, opacity: atLimit ? 0.5 : 1, cursor: atLimit ? "not-allowed" : "text" }}
         />
         {loading && <span style={spinner}>…</span>}
+      </div>
+
+      {/* Watchlist count */}
+      <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, color: atLimit ? "#e3b341" : "#6e7681", padding: "2px 4px", textAlign: "right" }}>
+        {watchlist.length}/{limit} symbols{atLimit ? " — remove one to add more" : ""}
       </div>
 
       {/* Dropdown */}
@@ -63,12 +72,13 @@ export default function SearchBar({ watchlist = [], onAdd }) {
         <div style={dropdown}>
           {results.map(r => {
             const already = watchlist.includes(r.symbol);
+            const disabled = already || atLimit;
             const up      = (r.change_pct ?? 0) >= 0;
             return (
               <div
                 key={r.symbol}
-                onClick={() => !already && handleAdd(r.symbol)}
-                style={{ ...row, cursor: already ? "default" : "pointer" }}
+                onClick={() => !disabled && handleAdd(r.symbol)}
+                style={{ ...row, cursor: disabled ? "default" : "pointer", opacity: atLimit && !already ? 0.5 : 1 }}
                 onMouseEnter={e => { if (!already) e.currentTarget.style.background = "#21262d"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
               >
