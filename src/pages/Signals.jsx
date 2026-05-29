@@ -1,6 +1,6 @@
 // src/pages/Signals.jsx — v2
 // One card per symbol (deduped). History modal shows feed-eligible snapshots
-// for that symbol from signal_snapshots/{symbol}/history, newest first.
+// for that symbol from signals/{symbol}/history, newest first.
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer } from "recharts";
