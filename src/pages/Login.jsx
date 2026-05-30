@@ -107,7 +107,7 @@ function Slideshow() {
       background: "#0d1117",
       border: `1px solid ${slide.tagColor}30`,
       borderRadius: 12,
-      padding: "20px 20px 16px",
+      padding: "24px 24px 18px",
       marginBottom: 20,
       transition: "border-color 0.4s",
       position: "relative",
@@ -138,7 +138,7 @@ function Slideshow() {
                 borderRadius: 4, padding: "1px 6px",
               }}>{slide.tag}</span>
             </div>
-            <div style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: "#e6edf3" }}>
+            <div style={{ fontFamily: MONO, fontSize: 15, fontWeight: 700, color: "#e6edf3" }}>
               {slide.title}
             </div>
           </div>
@@ -155,8 +155,8 @@ function Slideshow() {
 
         {/* Description */}
         <div style={{
-          fontFamily: MONO, fontSize: 10, color: "#8b949e",
-          lineHeight: 1.7, marginBottom: 12,
+          fontFamily: MONO, fontSize: 11, color: "#8b949e",
+          lineHeight: 1.8, marginBottom: 14,
         }}>{slide.desc}</div>
 
         {/* Preview rows */}
@@ -167,7 +167,7 @@ function Slideshow() {
           {slide.preview.map((row, i) => (
             <div key={i} style={{
               display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "7px 12px",
+              padding: "10px 14px",
               borderBottom: i < slide.preview.length - 1 ? "1px solid #21262d" : "none",
             }}>
               <span style={{ fontFamily: MONO, fontSize: 10, color: "#e6edf3", flex: 1 }}>
@@ -200,7 +200,7 @@ function Slideshow() {
       <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 14 }}>
         {SLIDES.map((_, i) => (
           <button key={i} onClick={() => goTo(i)} style={{
-            width: i === current ? 20 : 6,
+            width: i === current ? 24 : 7,
             height: 6, borderRadius: 3,
             background: i === current ? slide.tagColor : "#30363d",
             border: "none", cursor: "pointer", padding: 0,
@@ -302,9 +302,9 @@ export default function Login({ onLogin, onGoogle, error, loading }) {
 
 const s = {
   bg:         { minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#0d1117", padding:"1rem" },
-  card:       { background:"#161b22", border:"1px solid #30363d", borderRadius:12, padding:"2rem", width:"100%", maxWidth:420 },
+  card:       { background:"#161b22", border:"1px solid #30363d", borderRadius:12, padding:"2rem", width:"100%", maxWidth:540 },
   logo:       { textAlign:"center", marginBottom:"1.5rem" },
-  logoText:   { display:"block", fontSize:24, fontWeight:700, color:"#e6edf3", letterSpacing:"-0.5px" },
+  logoText:   { display:"block", fontSize:28, fontWeight:700, color:"#e6edf3", letterSpacing:"-0.5px" },
   logoSub:    { display:"block", fontSize:11, color:"#6e7681", marginTop:4, fontFamily:"'IBM Plex Mono',monospace" },
   error:      { background:"#3d1515", border:"1px solid #f85149", color:"#f85149", borderRadius:6, padding:"10px 14px", fontSize:13, marginBottom:"1rem" },
   form:       { display:"flex", flexDirection:"column", gap:"0.75rem" },
