@@ -16,6 +16,7 @@ const fmt    = (n, d = 2) => (+(n ?? 0)).toFixed(d);
 const sign   = (n) => (+(n ?? 0)) >= 0 ? "+" : "";
 const pnlCls = (n) => (+(n ?? 0)) >= 0 ? "up" : "down";
 const RISK_COLOR = { LOW: "var(--green)", MEDIUM: "var(--amber)", HIGH: "var(--red)" };
+const MONO = "'IBM Plex Mono', monospace";
 
 // ── Agreement modal — stronger version with scroll gate ──────────────────────
 const AGREEMENT_CLAUSES = [
@@ -72,8 +73,6 @@ function AgreementModal({ onAccept, loading }) {
   return (
     <div className="overlay">
       <div className="modal" style={{ maxWidth: 540, maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
-        
-        {/* Header */}
         <div className="modal-header" style={{ flexShrink: 0 }}>
           <span style={{ fontSize: 28 }}>⚖️</span>
           <div>
@@ -81,8 +80,6 @@ function AgreementModal({ onAccept, loading }) {
             <div className="modal-sub">Read carefully — scroll to bottom to continue</div>
           </div>
         </div>
-
-        {/* Warning banner */}
         <div style={{
           background: "#f8514912", border: "1px solid #f8514940",
           borderRadius: 8, padding: "8px 14px", margin: "0 0 12px",
@@ -92,35 +89,25 @@ function AgreementModal({ onAccept, loading }) {
           🚨 IMPORTANT: SignalBoard uses VIRTUAL money only. No real funds. No real trades.
           This is a simulation platform for educational purposes.
         </div>
-
-        {/* Scrollable terms */}
-        <div
-          onScroll={handleScroll}
-          style={{
-            overflowY: "auto", flex: 1,
-            border: "1px solid #21262d", borderRadius: 8,
-            padding: "12px 14px", marginBottom: 12,
-            background: "#0d1117",
-          }}
-        >
+        <div onScroll={handleScroll} style={{
+          overflowY: "auto", flex: 1,
+          border: "1px solid #21262d", borderRadius: 8,
+          padding: "12px 14px", marginBottom: 12,
+          background: "#0d1117",
+        }}>
           {AGREEMENT_CLAUSES.map((clause, i) => (
             <div key={i} style={{ marginBottom: 14 }}>
               <div style={{
                 fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700,
                 color: "#58a6ff", marginBottom: 4,
                 textTransform: "uppercase", letterSpacing: 0.5,
-              }}>
-                {i + 1}. {clause.title}
-              </div>
+              }}>{i + 1}. {clause.title}</div>
               <div style={{
                 fontFamily: "var(--mono)", fontSize: 10,
                 color: "#8b949e", lineHeight: 1.7,
-              }}>
-                {clause.text}
-              </div>
+              }}>{clause.text}</div>
             </div>
           ))}
-          {/* Scroll target */}
           <div style={{
             textAlign: "center", padding: "10px 0",
             fontFamily: "var(--mono)", fontSize: 9,
@@ -129,8 +116,6 @@ function AgreementModal({ onAccept, loading }) {
             {scrolled ? "✓ You have read the full agreement" : "↓ Scroll to bottom to continue"}
           </div>
         </div>
-
-        {/* Confirmation checkboxes */}
         <div style={{ flexShrink: 0 }}>
           {CONFIRM_ITEMS.map((text, i) => (
             <label key={i} className="check-row"
@@ -140,8 +125,6 @@ function AgreementModal({ onAccept, loading }) {
               <span style={{ fontSize: 11 }}>{text}</span>
             </label>
           ))}
-
-          {/* Full name confirmation */}
           <div style={{ margin: "10px 0 14px" }}>
             <div style={{
               fontFamily: "var(--mono)", fontSize: 9, color: "#6e7681",
@@ -161,7 +144,6 @@ function AgreementModal({ onAccept, loading }) {
               }}
             />
           </div>
-
           <button className="btn btn-primary"
             style={{ width: "100%", opacity: allChecked ? 1 : 0.35 }}
             disabled={!allChecked || loading}
@@ -180,7 +162,7 @@ function AgreementModal({ onAccept, loading }) {
   );
 }
 
-// ── Confirm modal — every action gets one ─────────────────────────────────────
+// ── Confirm modal ─────────────────────────────────────────────────────────────
 function ConfirmModal({ title, description, warning, details, confirmLabel,
   confirmClass = "btn-primary", onConfirm, onCancel, loading, children }) {
   return (
@@ -238,8 +220,8 @@ function AllocateModal({ cfg, allocation, availableCash, onConfirm, onCancel, lo
     <ConfirmModal
       title={allocation ? `Add More to ${cfg.label}` : `Start ${cfg.label}`}
       description={allocation
-        ? `Add more virtual funds to your ${cfg.label} strategy. They will be available for auto-trading immediately.`
-        : `Allocate virtual funds to start the ${cfg.label} strategy. The auto-trader will manage buys, sells, and stop-losses inside this fund on your behalf.`}
+        ? `Add more virtual funds to your ${cfg.label} strategy.`
+        : `Allocate virtual funds to start the ${cfg.label} strategy.`}
       details={[
         ["Strategy",         cfg.label],
         ["Risk Level",       cfg.risk_level],
@@ -252,8 +234,7 @@ function AllocateModal({ cfg, allocation, availableCash, onConfirm, onCancel, lo
       ]}
       confirmLabel={allocation ? "Add Funds" : "▶ Start Strategy"}
       onConfirm={() => valid && onConfirm(numVal)}
-      onCancel={onCancel}
-      loading={loading}
+      onCancel={onCancel} loading={loading}
     >
       <div style={{ marginBottom: 14 }}>
         <div className="stat-label" style={{ marginBottom: 8 }}>AMOUNT TO ALLOCATE</div>
@@ -288,7 +269,7 @@ function ReduceModal({ cfg, allocation, onConfirm, onCancel, loading }) {
   return (
     <ConfirmModal
       title={`Reduce ${cfg.label} Allocation`}
-      description="Return idle (uninvested) cash from this strategy back to your available cash. Invested funds in open positions cannot be withdrawn until the position is sold."
+      description="Return idle (uninvested) cash from this strategy back to your available cash."
       details={[
         ["Idle Cash Available", `$${fmt(idle)}`],
         ["Currently Invested",  `$${fmt(allocation?.invested ?? 0)}`],
@@ -316,7 +297,8 @@ function ReduceModal({ cfg, allocation, onConfirm, onCancel, loading }) {
 // ── Manual position card ──────────────────────────────────────────────────────
 function ManualPositionCard({ pos, prices = {} }) {
   const priceData = prices[pos.symbol];
-  const livePrice = (typeof priceData === 'object' ? priceData?.price : priceData) ?? pos.current_price ?? pos.avg_buy_price ?? 0;
+  const livePrice = (typeof priceData === 'object' ? priceData?.price : priceData)
+                    ?? pos.current_price ?? pos.avg_buy_price ?? 0;
   const shares    = pos.shares ?? 0;
   const abp       = pos.avg_buy_price ?? pos.buy_price ?? 0;
   const liveValue = livePrice * shares;
@@ -348,52 +330,167 @@ function ManualPositionCard({ pos, prices = {} }) {
   );
 }
 
-// ── Strategy position card ────────────────────────────────────────────────────
+// ── Strategy position card — Option C (all 3 sell triggers visible) ───────────
 function StrategyPositionCard({ pos, prices = {} }) {
-  // Use live WebSocket price if available, fall back to stored price
-  const priceData = prices[pos.symbol];
-  const livePrice = (typeof priceData === 'object' ? priceData?.price : priceData) ?? pos.current_price ?? pos.buy_price;
-  const shares    = pos.shares ?? 0;
-  const bp        = pos.buy_price ?? 0;
-  const liveValue = livePrice * shares;
-  const pnl       = bp > 0 ? liveValue - (bp * shares) : (pos.unrealized_pnl ?? 0);
-  const pnlPct    = bp > 0 ? ((livePrice - bp) / bp) * 100 : (pos.unrealized_pnl_pct ?? 0);
-  const slRange   = livePrice - (pos.stop_loss_price ?? 0);
-  const slPct     = slRange > 0
-    ? Math.max(0, Math.min(100, ((livePrice - (pos.stop_loss_price ?? 0)) / (bp - (pos.stop_loss_price ?? 0))) * 100))
+  // Live price from WebSocket
+  const priceData    = prices[pos.symbol];
+  const livePrice    = (typeof priceData === 'object' ? priceData?.price : priceData)
+                       ?? pos.current_price ?? pos.buy_price ?? 0;
+  const shares       = pos.shares ?? 0;
+  const bp           = pos.buy_price ?? 0;
+  const liveValue    = livePrice * shares;
+  const pnl          = bp > 0 ? liveValue - (bp * shares) : (pos.unrealized_pnl ?? 0);
+  const pnlPct       = bp > 0 ? ((livePrice - bp) / bp) * 100 : (pos.unrealized_pnl_pct ?? 0);
+
+  // Trailing stop values
+  // If trailing_high missing (old position before fix), use max of live price and buy price
+  const trailingHigh = pos.trailing_high ?? Math.max(livePrice, bp);
+  const slPct        = pos.stop_loss_pct ?? 8;
+  const trailingStop = +(trailingHigh * (1 - slPct / 100)).toFixed(2);
+  const hardStop     = pos.stop_loss_price ?? +(bp * (1 - slPct / 100)).toFixed(2);
+  const targetPrice  = pos.target_price ?? 0;
+
+  // Progress bar — from hard stop to trailing high
+  const barRange = trailingHigh - hardStop;
+  const barPct   = barRange > 0
+    ? Math.max(0, Math.min(100, ((livePrice - hardStop) / barRange) * 100))
     : 100;
+
+  // Color based on distance from trailing stop
+  const distFromTrail = trailingHigh > 0
+    ? ((livePrice - trailingStop) / trailingHigh) * 100 : 100;
+  const barColor = distFromTrail < 2
+    ? "var(--red)" : distFromTrail < 5
+    ? "var(--amber)" : "var(--green)";
+
+  // Which priority is closest to triggering
+  const nextTrigger = livePrice <= hardStop ? "hard_stop"
+    : livePrice <= trailingStop ? "trailing"
+    : "none";
+
   return (
     <div className="position-card fade-in">
+      {/* Header — symbol + P&L */}
       <div className="position-header">
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <span className="position-symbol">{pos.symbol}</span>
           <span className="badge badge-dim">{pos.signal_confidence || "AUTO"}</span>
+          {trailingHigh > bp && (
+            <span style={{
+              fontFamily: MONO, fontSize: 9, color: "#3fb950",
+              background: "#3fb95015", border: "1px solid #3fb95030",
+              borderRadius: 4, padding: "1px 6px",
+            }}>↑ trailing</span>
+          )}
         </div>
         <div className="position-pnl">
           <div className={`main ${pnlCls(pnl)}`}>{sign(pnl)}${fmt(Math.abs(pnl))}</div>
           <div className={`sub ${pnlCls(pnlPct)}`}>{sign(pnlPct)}{fmt(pnlPct)}%</div>
         </div>
       </div>
+
+      {/* Stats */}
       <div className="stat-grid">
-        {[["Shares", fmt(pos.shares, 4)], ["Bought", `$${fmt(pos.buy_price)}`],
-          ["Now", `$${fmt(livePrice)}`], ["Value", `$${fmt(liveValue)}`],
-          ["Stop-Loss", `$${fmt(pos.stop_loss_price)}`]].map(([l, v]) => (
+        {[
+          ["Shares",  fmt(shares, 4)],
+          ["Bought",  `$${fmt(bp)}`],
+          ["Now",     `$${fmt(livePrice)}`],
+          ["Peak",    `$${fmt(trailingHigh)}`],
+          ["Value",   `$${fmt(liveValue)}`],
+          ...(targetPrice > 0 ? [["Target", `$${fmt(targetPrice)}`]] : []),
+        ].map(([l, v]) => (
           <div key={l} className="stat-item">
             <span className="stat-label">{l}</span>
-            <span className="stat-value">{v}</span>
+            <span className="stat-value" style={{
+              color: l === "Peak" ? "#3fb950"
+                : l === "Target" ? "#58a6ff" : undefined,
+            }}>{v}</span>
           </div>
         ))}
       </div>
-      <div className="sl-bar-wrap">
-        <div className="sl-bar-labels">
-          <span>Stop ${fmt(pos.stop_loss_price)}</span>
-          <span>Buy ${fmt(pos.buy_price)}</span>
+
+      {/* Price bar — hard stop → live → trailing high */}
+      <div className="sl-bar-wrap" style={{ marginTop: 10 }}>
+        <div className="sl-bar-labels" style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+          <span style={{ fontFamily: MONO, fontSize: 9, color: "#f85149" }}>Hard ${fmt(hardStop)}</span>
+          <span style={{ fontFamily: MONO, fontSize: 9, color: "#e3b341" }}>Trail ${fmt(trailingStop)}</span>
+          <span style={{ fontFamily: MONO, fontSize: 9, color: "#3fb950" }}>Peak ${fmt(trailingHigh)}</span>
         </div>
         <div className="sl-bar-track">
           <div className="sl-bar-fill" style={{
-            width: `${slPct}%`,
-            background: slPct < 20 ? "var(--red)" : slPct < 50 ? "var(--amber)" : "var(--green)",
+            width: `${barPct}%`,
+            background: barColor,
+            transition: "width 0.5s, background 0.5s",
           }} />
+        </div>
+      </div>
+
+      {/* 3 sell triggers */}
+      <div style={{
+        marginTop: 10, padding: "8px 10px",
+        background: "#0d1117", borderRadius: 8,
+        border: "1px solid #21262d",
+      }}>
+        <div style={{
+          fontFamily: MONO, fontSize: 8, color: "#6e7681",
+          letterSpacing: 1, marginBottom: 6, textTransform: "uppercase",
+        }}>Sell triggers</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+
+          {/* ① SELL signal */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{
+              fontFamily: MONO, fontSize: 9, fontWeight: 700,
+              color: "#f85149", background: "#f8514915",
+              border: "1px solid #f8514930",
+              borderRadius: 4, padding: "1px 6px",
+            }}>①</span>
+            <span style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e", flex: 1 }}>
+              AI SELL signal (HIGH confidence)
+            </span>
+            <span style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681" }}>immediate</span>
+          </div>
+
+          {/* ② Trailing stop */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{
+              fontFamily: MONO, fontSize: 9, fontWeight: 700,
+              color: "#e3b341", background: "#e3b34115",
+              border: "1px solid #e3b34130",
+              borderRadius: 4, padding: "1px 6px",
+            }}>②</span>
+            <span style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e", flex: 1 }}>
+              Trailing stop ${fmt(trailingStop)}
+              <span style={{ color: "#6e7681" }}> ({slPct}% below peak ${fmt(trailingHigh)})</span>
+            </span>
+            <span style={{
+              fontFamily: MONO, fontSize: 9,
+              color: nextTrigger === "trailing" ? "#e3b341" : "#6e7681",
+            }}>
+              {nextTrigger === "trailing" ? "⚡ active" : `↓ $${fmt(livePrice - trailingStop)}`}
+            </span>
+          </div>
+
+          {/* ③ Hard stop */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{
+              fontFamily: MONO, fontSize: 9, fontWeight: 700,
+              color: "#6e7681", background: "#6e767115",
+              border: "1px solid #6e767130",
+              borderRadius: 4, padding: "1px 6px",
+            }}>③</span>
+            <span style={{ fontFamily: MONO, fontSize: 9, color: "#8b949e", flex: 1 }}>
+              Hard stop-loss ${fmt(hardStop)}
+              <span style={{ color: "#6e7681" }}> ({slPct}% below buy ${fmt(bp)})</span>
+            </span>
+            <span style={{
+              fontFamily: MONO, fontSize: 9,
+              color: nextTrigger === "hard_stop" ? "#f85149" : "#6e7681",
+            }}>
+              {nextTrigger === "hard_stop" ? "⚡ active" : `↓ $${fmt(livePrice - hardStop)}`}
+            </span>
+          </div>
+
         </div>
       </div>
     </div>
@@ -463,11 +560,9 @@ function StrategyCard({ sk, cfg, allocation, onAction, selected, onSelect }) {
             <button className="btn" style={{ fontSize: 11, color: "var(--red)" }}
               onClick={e => { e.stopPropagation(); onAction("stop", sk); }}>■ Stop</button>
           </div>
-          {isAllocated && (
-            <div className="hint" style={{ marginTop: 8, fontSize: 10 }}>
-              Click card to view positions & trades ↓
-            </div>
-          )}
+          <div className="hint" style={{ marginTop: 8, fontSize: 10 }}>
+            Click card to view positions & trades ↓
+          </div>
         </>
       ) : (
         <>
@@ -503,10 +598,10 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
   const [acting,        setActing]        = useState(false);
   const [error,         setError]         = useState(null);
   const [toast,         setToast]         = useState(null);
-  const [modal,         setModal]         = useState(null);  // {type, sk}
+  const [modal,         setModal]         = useState(null);
   const [selectedSk,    setSelectedSk]    = useState(null);
   const [stratTab,      setStratTab]      = useState("positions");
-  const [mainTab,       setMainTab]       = useState("strategies"); // strategies | manual
+  const [mainTab,       setMainTab]       = useState("strategies");
 
   const summary    = overview?.summary    ?? {};
   const strategies = overview?.strategies ?? {};
@@ -532,14 +627,12 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Load detail data when strategy selected
   useEffect(() => {
     if (!selectedSk) return;
     getStrategyTrades(selectedSk).then(d => setStratTrades(d.trades ?? [])).catch(() => {});
     getPortfolioTransactions().then(d => setTransactions(d.transactions ?? [])).catch(() => {});
   }, [selectedSk]);
 
-  // Load manual trades when manual tab active
   useEffect(() => {
     if (mainTab === "manual") {
       getManualTrades().then(d => setManualTrades(d.trades ?? [])).catch(() => {});
@@ -553,20 +646,20 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
     finally { setActing(false); setModal(null); }
   };
 
-  const handleAgreement    = () => act(portfolioAcceptAgreement, "Agreement accepted — welcome!");
-  const handleAllocate     = (amount) => act(
+  const handleAgreement = () => act(portfolioAcceptAgreement, "Agreement accepted — welcome!");
+  const handleAllocate  = (amount) => act(
     () => portfolioAllocate(modal.sk, amount),
     `$${amount.toLocaleString()} allocated to ${strategies[modal.sk]?.config?.label}`);
-  const handleReduce       = (amount) => act(
+  const handleReduce    = (amount) => act(
     () => portfolioReduce(modal.sk, amount),
     `$${amount.toLocaleString()} returned to available cash`);
-  const handlePause        = () => {
+  const handlePause     = () => {
     const paused = !(strategies[modal.sk]?.allocation?.is_paused ?? false);
     act(() => portfolioPause(modal.sk, paused),
       paused ? `${strategies[modal.sk]?.config?.label} paused`
              : `${strategies[modal.sk]?.config?.label} resumed`);
   };
-  const handleStop         = () => act(
+  const handleStop      = () => act(
     () => portfolioStop(modal.sk),
     `${strategies[modal.sk]?.config?.label} stopped — funds returned to available cash`);
 
@@ -588,7 +681,6 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
 
       {!summary.agreement_accepted && <AgreementModal onAccept={handleAgreement} loading={acting} />}
 
-      {/* Action modals */}
       {modal?.type === "allocate" && (
         <AllocateModal
           cfg={strategies[modal.sk]?.config ?? {}}
@@ -611,7 +703,7 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
             : `Pause ${strategies[modal.sk]?.config?.label}`}
           description={strategies[modal.sk]?.allocation?.is_paused
             ? "Resume auto-trading. The strategy will begin opening new positions on the next qualifying signal."
-            : "Pause auto-trading. Your open positions stay open and P&L keeps updating. No new trades will be placed. Cash stays in this strategy. You can resume anytime."}
+            : "Pause auto-trading. Your open positions stay open and P&L keeps updating. No new trades will be placed."}
           details={[
             ["Open Positions", String((strategies[modal.sk]?.positions ?? []).length)],
             ["Invested",       `$${fmt(strategies[modal.sk]?.allocation?.invested ?? 0)}`],
@@ -624,7 +716,7 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
       {modal?.type === "stop" && (
         <ConfirmModal
           title={`Stop ${strategies[modal.sk]?.config?.label}`}
-          description="This will immediately close ALL open positions at current market prices and return all funds (proceeds + idle cash) to your available cash. The strategy sub-account will be removed."
+          description="This will immediately close ALL open positions at current market prices and return all funds to your available cash."
           warning="This action cannot be undone. All positions will be closed at current market price."
           details={[
             ["Open Positions",  String((strategies[modal.sk]?.positions ?? []).length)],
@@ -639,10 +731,9 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
 
       <div className="paper-banner">
-        📊 Paper Portfolio — Virtual Money Only · No real funds involved · All figures (simulated)
+        📊 Paper Portfolio — Virtual Money Only · No real funds involved · All figures simulated
       </div>
 
-      {/* Summary */}
       <div className="summary-grid" style={{ marginBottom: 20 }}>
         {[
           { label: "Your Portfolio Value", value: `$${fmt(summary.total_value)}`, cls: "up" },
@@ -658,7 +749,6 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
         ))}
       </div>
 
-      {/* Main tabs */}
       <div className="sub-tabs" style={{ marginBottom: 20 }}>
         {[["strategies", "🤖 My Strategies"], ["manual", "📈 My Manual Trades"]].map(([id, label]) => (
           <button key={id} className={`sub-tab ${mainTab === id ? "active" : ""}`}
@@ -669,14 +759,12 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
         ))}
       </div>
 
-      {/* ── STRATEGIES TAB ──────────────────────────────────────────────────── */}
       {mainTab === "strategies" && (
         <div>
           <div className="hint" style={{ marginBottom: 14 }}>
             Allocate virtual funds to a strategy and the auto-trader manages everything inside —
             buys, sells, and stop-losses. Think of each strategy as a fund you invest in.
           </div>
-
           <div className="strategy-grid">
             {Object.entries(strategies).map(([sk, data]) => (
               <StrategyCard
@@ -690,7 +778,6 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
             ))}
           </div>
 
-          {/* Strategy detail panel */}
           {selectedSk && selectedAlloc && (
             <div className="card" style={{ marginTop: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -707,14 +794,12 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
                   style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18 }}
                   onClick={() => setSelectedSk(null)}>✕</button>
               </div>
-
               <div className="sub-tabs" style={{ marginBottom: 14 }}>
                 {["positions", "trades", "transactions"].map(t => (
                   <button key={t} className={`sub-tab ${stratTab === t ? "active" : ""}`}
                     onClick={() => setStratTab(t)}>{t}</button>
                 ))}
               </div>
-
               {stratTab === "positions" && (
                 (selectedData?.positions ?? []).length === 0
                   ? <div className="empty-state">No open positions in {selectedCfg.label}.</div>
@@ -746,15 +831,12 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
         </div>
       )}
 
-      {/* ── MANUAL TRADES TAB ───────────────────────────────────────────────── */}
       {mainTab === "manual" && (
         <div>
           <div className="hint" style={{ marginBottom: 14 }}>
             Your personal trades — bought directly from available cash. The auto-trader never
             touches these. Buy any stock from Live Prices using the Portfolio tab.
           </div>
-
-          {/* Manual positions */}
           {(manual.positions ?? []).length === 0 ? (
             <div className="card empty-state" style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}>📈</div>
@@ -775,8 +857,6 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
               {(manual.positions ?? []).map(p => <ManualPositionCard key={p.symbol} pos={p} prices={prices} />)}
             </div>
           )}
-
-          {/* Manual trade history */}
           <div className="stat-label" style={{ marginBottom: 12 }}>TRADE HISTORY</div>
           <TradeHistoryTab trades={manualTrades} />
         </div>
