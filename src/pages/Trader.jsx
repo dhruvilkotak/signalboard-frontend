@@ -13,7 +13,7 @@ import {
 import { TradeHistoryTab, TransactionHistoryTab } from "../components/TradeHistory";
 
 const fmt    = (n, d = 2) => (+(n ?? 0)).toFixed(d);
-const sign   = (n) => (+(n ?? 0)) >= 0 ? "+" : "";
+const sign   = (n) => (+(n ?? 0)) >= 0 ? "+" : "-";
 const pnlCls = (n) => (+(n ?? 0)) >= 0 ? "up" : "down";
 const RISK_COLOR = { LOW: "var(--green)", MEDIUM: "var(--amber)", HIGH: "var(--red)" };
 const MONO = "'IBM Plex Mono', monospace";

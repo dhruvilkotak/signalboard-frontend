@@ -9,7 +9,7 @@ const PAGE_SIZE = 20;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt     = (n, d = 2) => (n ?? 0).toFixed(d);
-const sign    = (n) => (n ?? 0) >= 0 ? "+" : "";
+const sign    = (n) => (n ?? 0) >= 0 ? "+" : "-";
 const pnlCls  = (n) => (n ?? 0) >= 0 ? "up" : "down";
 const fmtDate = (iso) => {
   if (!iso) return "—";
@@ -260,55 +260,167 @@ export function TradeHistoryTab({ trades }) {
 }
 
 // ── Single trade row ──────────────────────────────────────────────────────────
+// Parse buy price from reason string e.g. "...bought $85.69..."
+function parseBuyPrice(reason) {
+  if (!reason) return null;
+  const m = reason.match(/bought \$?([\d.]+)/i);
+  return m ? parseFloat(m[1]) : null;
+}
+
+function triggerLabel(trigger) {
+  switch (trigger) {
+    case "trailing_stop": return "② Trailing stop";
+    case "hard_stop":     return "③ Hard stop-loss";
+    case "sell_signal":   return "① SELL signal";
+    case "stop_strategy": return "■ Strategy stopped";
+    case "auto":          return "auto";
+    case "manual":        return "manual";
+    default:              return trigger ?? "auto";
+  }
+}
+
 function TradeRow({ t }) {
   const [open, setOpen] = useState(false);
-  const isBuy = t.action === "BUY";
+  const isBuy    = t.action === "BUY";
+  const buyPrice = isBuy ? null : parseBuyPrice(t.reason);
+  const hasPnl   = t.pnl != null && t.pnl !== 0;
 
   return (
-    <div className="trade-card fade-in" style={{ cursor: "pointer" }} onClick={() => setOpen(o => !o)}>
-      <div className="trade-header">
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <div className="trade-card fade-in" onClick={() => setOpen(o => !o)}
+      style={{ cursor: "pointer", borderLeft: `3px solid ${isBuy ? "var(--green)" : "var(--red)"}` }}>
+
+      {/* ── Row 1: Action + Symbol + Trigger + Date + PnL ── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <span className={`badge ${isBuy ? "badge-buy" : "badge-sell"}`}>{t.action}</span>
-          <span className="mono" style={{ fontWeight: 700 }}>{t.symbol}</span>
-          <span className="trigger-badge">{t.trigger}</span>
+          <span className="mono" style={{ fontSize: 15, fontWeight: 700, color: "var(--text1)" }}>{t.symbol}</span>
+          <span style={{
+            fontFamily: "var(--mono)", fontSize: 9, fontWeight: 700,
+            background: "var(--bg2)", border: "1px solid var(--border)",
+            borderRadius: 4, padding: "1px 7px", color: "var(--text2)",
+          }}>{triggerLabel(t.trigger)}</span>
+          {t.signal_confidence && (
+            <span style={{
+              fontFamily: "var(--mono)", fontSize: 9,
+              color: t.signal_confidence === "HIGH" ? "var(--green)" : "var(--amber)",
+            }}>{t.signal_confidence}</span>
+          )}
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          {t.pnl != null && t.pnl !== 0 && (
-            <span className={`mono ${pnlCls(t.pnl)}`} style={{ fontSize: 13, fontWeight: 700 }}>
+          {hasPnl && (
+            <span className={`mono ${pnlCls(t.pnl)}`} style={{ fontSize: 14, fontWeight: 700 }}>
               {sign(t.pnl)}${fmt(Math.abs(t.pnl))}
             </span>
           )}
-          <span className="hint mono">{fmtDate(t.timestamp)}</span>
-          <span className="hint">{open ? "▲" : "▼"}</span>
+          <span className="hint mono" style={{ fontSize: 11 }}>{fmtDate(t.timestamp)}</span>
+          <span className="hint" style={{ fontSize: 10 }}>{open ? "▲" : "▼"}</span>
         </div>
       </div>
 
-      <div className="trade-meta">
-        <span>{fmt(t.shares, 4)} sh @ <strong>${fmt(t.price)}</strong></span>
-        <span>Total: ${fmt(t.total)}</span>
-        {t.pnl_pct != null && t.pnl !== 0 && (
-          <span className={pnlCls(t.pnl_pct)}>{sign(t.pnl_pct)}{fmt(t.pnl_pct)}%</span>
-        )}
-        <span className="hint">Balance after: ${fmt(t.balance_after)}</span>
+      {/* ── Row 2: Key numbers in clear labeled columns ── */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: isBuy
+          ? "1fr 1fr 1fr 1fr"
+          : "1fr 1fr 1fr 1fr 1fr 1fr",
+        gap: 12,
+        background: "var(--bg2)",
+        borderRadius: 8,
+        padding: "8px 12px",
+      }}>
+        {/* BUY fields */}
+        {isBuy && <>
+          <div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", marginBottom: 2 }}>SHARES</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 700, color: "var(--text1)" }}>
+              {fmt(t.shares, 4)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", marginBottom: 2 }}>BUY PRICE</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 700, color: "var(--text1)" }}>
+              ${fmt(t.price)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", marginBottom: 2 }}>INVESTED</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 700, color: "var(--text1)" }}>
+              ${fmt(t.total)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", marginBottom: 2 }}>CASH AFTER</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 13, color: "var(--text2)" }}>
+              ${fmt(t.balance_after)}
+            </div>
+          </div>
+        </>}
+
+        {/* SELL fields — shows buy price + sell price side by side */}
+        {!isBuy && <>
+          <div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", marginBottom: 2 }}>SHARES</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 700, color: "var(--text1)" }}>
+              {fmt(t.shares, 4)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--green)", marginBottom: 2 }}>BUY PRICE</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 700, color: "var(--text1)" }}>
+              {buyPrice ? `$${fmt(buyPrice)}` : "—"}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--red)", marginBottom: 2 }}>SELL PRICE</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 700, color: "var(--text1)" }}>
+              ${fmt(t.price)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", marginBottom: 2 }}>PROCEEDS</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 700, color: "var(--text1)" }}>
+              ${fmt(t.total)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", marginBottom: 2 }}>REALIZED P&L</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 700,
+              color: hasPnl ? (t.pnl >= 0 ? "var(--green)" : "var(--red)") : "var(--text3)" }}>
+              {hasPnl ? `${sign(t.pnl)}$${fmt(Math.abs(t.pnl))}` : "—"}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", marginBottom: 2 }}>RETURN</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 700,
+              color: (t.pnl_pct ?? 0) >= 0 ? "var(--green)" : "var(--red)" }}>
+              {t.pnl_pct != null ? `${sign(t.pnl_pct)}${fmt(t.pnl_pct)}%` : "—"}
+            </div>
+          </div>
+        </>}
       </div>
 
-      {/* Expanded detail */}
+      {/* ── Expanded: reason + full details ── */}
       {open && (
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
           {t.reason && (
-            <div className="trade-reason" style={{ marginBottom: 6 }}>
-              "{t.reason.slice(0, 200)}{t.reason.length > 200 ? "…" : ""}"
+            <div style={{
+              fontFamily: "var(--mono)", fontSize: 10, color: "var(--text3)",
+              fontStyle: "italic", marginBottom: 10, lineHeight: 1.6,
+              background: "var(--bg2)", borderRadius: 6, padding: "6px 10px",
+            }}>
+              {t.reason.slice(0, 300)}{t.reason.length > 300 ? "…" : ""}
             </div>
           )}
           <div className="stat-grid">
             {[
-              ["Signal",    t.signal_confidence ?? "—"],
-              ["Trigger",   t.trigger ?? "—"],
-              ["Timestamp", fmtDate(t.timestamp)],
-            ].map(([l, v]) => (
+              ["Date",     fmtDate(t.timestamp)],
+              ["Trigger",  t.trigger ?? "auto"],
+              ["Strategy", t.strategy_key ?? "—"],
+              ["Signal",   t.signal_confidence ?? "—"],
+            ].filter(([, v]) => v && v !== "—").map(([l, v]) => (
               <div key={l} className="stat-item">
                 <span className="stat-label">{l}</span>
-                <span className="stat-value">{v}</span>
+                <span className="stat-value mono" style={{ fontSize: 11 }}>{v}</span>
               </div>
             ))}
           </div>
