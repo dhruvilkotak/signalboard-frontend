@@ -187,7 +187,7 @@ export function TradeHistoryTab({ trades }) {
     if (filter === "BUY")  return trades.filter(t => t.action === "BUY");
     if (filter === "SELL") return trades.filter(t => t.action === "SELL");
     if (filter === "AUTO") return trades.filter(t => t.trigger === "auto");
-    if (filter === "STOP") return trades.filter(t => t.trigger === "stop_loss");
+    if (filter === "STOP") return trades.filter(t => ["stop_loss","trailing_stop","hard_stop","sell_signal"].includes(t.trigger));
     if (filter === "MANUAL") return trades.filter(t => t.trigger === "manual");
     return trades;
   }, [trades, filter]);

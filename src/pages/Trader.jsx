@@ -801,11 +801,73 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
                 ))}
               </div>
               {stratTab === "positions" && (
-                (selectedData?.positions ?? []).length === 0
-                  ? <div className="empty-state">No open positions in {selectedCfg.label}.</div>
-                  : (selectedData?.positions ?? []).map(p => (
-                    <StrategyPositionCard key={`${p.symbol}_${p.strategy_key}`} pos={p} prices={prices} />
-                  ))
+                <>
+                  {/* Open positions */}
+                  {(selectedData?.positions ?? []).length === 0 ? (
+                    <div className="empty-state" style={{ marginBottom: 16 }}>
+                      No open positions in {selectedCfg.label}.
+                    </div>
+                  ) : (
+                    (selectedData?.positions ?? []).map(p => (
+                      <StrategyPositionCard key={`${p.symbol}_${p.strategy_key}`} pos={p} prices={prices} />
+                    ))
+                  )}
+                  {/* Closed positions history */}
+                  {stratTrades.filter(t => t.action === "SELL").length > 0 && (
+                    <div style={{ marginTop: 16 }}>
+                      <div className="stat-label" style={{ marginBottom: 10 }}>
+                        CLOSED POSITIONS — {stratTrades.filter(t => t.action === "SELL").length} trades
+                      </div>
+                      {stratTrades.filter(t => t.action === "SELL").slice(0, 10).map((t, i) => (
+                        <div key={i} style={{
+                          background: "var(--bg2)", border: "1px solid var(--border)",
+                          borderRadius: 8, padding: "10px 14px", marginBottom: 8,
+                          display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+                        }}>
+                          <span style={{
+                            fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700,
+                            background: "#f8514915", border: "1px solid #f8514940",
+                            borderRadius: 4, padding: "1px 8px", color: "var(--red)", flexShrink: 0,
+                          }}>CLOSED</span>
+                          <div style={{ flex: 1, minWidth: 80 }}>
+                            <div style={{ fontFamily: "var(--mono)", fontSize: 14, fontWeight: 700, color: "var(--text1)" }}>
+                              {t.symbol}
+                            </div>
+                            <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", marginTop: 2 }}>
+                              {t.trigger === "trailing_stop" ? "② Trailing stop" :
+                               t.trigger === "hard_stop"     ? "③ Hard stop-loss" :
+                               t.trigger === "sell_signal"   ? "① SELL signal" :
+                               t.trigger || "auto"}
+                              {" · "}{new Date(t.timestamp).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)" }}>SOLD @</div>
+                            <div style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 700, color: "var(--text1)" }}>
+                              ${fmt(t.price)}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)" }}>SHARES</div>
+                            <div style={{ fontFamily: "var(--mono)", fontSize: 12, color: "var(--text1)" }}>
+                              {fmt(t.shares, 4)}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ fontFamily: "var(--mono)", fontSize: 15, fontWeight: 700,
+                              color: (t.pnl ?? 0) >= 0 ? "var(--green)" : "var(--red)" }}>
+                              {sign(t.pnl ?? 0)}${fmt(Math.abs(t.pnl ?? 0))}
+                            </div>
+                            <div style={{ fontFamily: "var(--mono)", fontSize: 9,
+                              color: (t.pnl_pct ?? 0) >= 0 ? "var(--green)" : "var(--red)" }}>
+                              {sign(t.pnl_pct ?? 0)}{fmt(Math.abs(t.pnl_pct ?? 0))}%
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
               {stratTab === "trades" && <TradeHistoryTab trades={stratTrades} />}
               {stratTab === "transactions" && (
