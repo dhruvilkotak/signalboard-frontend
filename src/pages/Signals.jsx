@@ -637,7 +637,7 @@ export default function Signals({ watchlist = [] }) {
     try {
       const token = await getToken();
       const p = new URLSearchParams();
-      if (sigType)  p.set("signal_type", sigType);
+      // signal_type (BUY/SELL) filtered client-side — backend filters by confidence only
       if (showAll)  p.set("show_all", "true");
 
       const res = await fetch(`${API}/api/signals/stream?${p.toString()}`, {
@@ -652,22 +652,28 @@ export default function Signals({ watchlist = [] }) {
         (b.generated_at || "").localeCompare(a.generated_at || "")
       );
 
-      setFeed(sorted);
+      setFeed(sorted);  // store full feed — filter applied in render
       setHasMore(false);  // no pagination needed — one doc per symbol
     } catch (e) {
       setErr(e.message);
     } finally {
       reset ? setLoading(false) : setLoadMore(false);
     }
-  }, [sigType, showAll]);
+  }, [showAll]);
 
-  useEffect(() => { loadFeed(true); }, [sigType, showAll]);
+  // Reload only when showAll changes — sigType filtered client-side
+  useEffect(() => { loadFeed(true); }, [showAll]);
 
   function handleScanDone() { loadFeed(true); }
 
   const buys  = feed.filter(s => (s.current_signal || s.signal) === "BUY").length;
   const sells = feed.filter(s => (s.current_signal || s.signal) === "SELL").length;
   const total = buys + sells;
+
+  // Client-side BUY/SELL filter — applied after fetch
+  const filteredFeed = sigType
+    ? feed.filter(s => (s.current_signal || s.signal || "").toUpperCase() === sigType)
+    : feed;
 
   return (
     <div>
@@ -736,15 +742,17 @@ export default function Signals({ watchlist = [] }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
           {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
-      ) : feed.length === 0 ? (
+      ) : filteredFeed.length === 0 ? (
         <div className="card" style={{ padding: 32, textAlign: "center" }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
           <div style={{ color: "var(--text2)", marginBottom: 4, fontSize: 14 }}>
-            No high-conviction signals yet
+            {sigType ? `No ${sigType} signals right now` : "No high-conviction signals yet"}
           </div>
           <div style={{ color: "var(--text3)", fontSize: 12, marginBottom: 12, lineHeight: 1.6 }}>
-            Only BUY/SELL signals with HIGH confidence appear here.<br />
-            Signals are generated automatically during market hours.
+            {sigType
+              ? `${feed.length} signal${feed.length !== 1 ? "s" : ""} in feed — none are ${sigType}`
+              : <>Only BUY/SELL signals with HIGH confidence appear here.<br />Signals are generated automatically during market hours.</>
+            }
           </div>
           {isAdmin ? (
             <div style={{ color: "var(--blue)", fontSize: 12, fontFamily: "var(--mono)" }}>
@@ -758,7 +766,7 @@ export default function Signals({ watchlist = [] }) {
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
-          {feed.map((sig, i) => (
+          {filteredFeed.map((sig, i) => (
             <SignalCard
               key={sig.symbol || i}
               sig={sig}
