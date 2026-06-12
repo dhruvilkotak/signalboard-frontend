@@ -11,7 +11,8 @@ export default function SearchBar({ watchlist = [], onAdd, limit = 25 }) {
   const [results, setResults] = useState([]);
   const [open,    setOpen]    = useState(false);
   const [loading, setLoading] = useState(false);
-  const timerRef = useRef(null);
+  const timerRef      = useRef(null);
+  const mouseDownInDropdown = useRef(false); // guard: don't close on dropdown click
 
   const search = async (q) => {
     if (!q.trim()) { setResults([]); setOpen(false); return; }
@@ -19,8 +20,9 @@ export default function SearchBar({ watchlist = [], onAdd, limit = 25 }) {
     try {
       const res  = await fetch(`${API}/api/search/?q=${encodeURIComponent(q)}`);
       const data = await res.json();
-      setResults(Array.isArray(data) ? data : []);
-      setOpen(true);
+      const list = Array.isArray(data) ? data : [];
+      setResults(list);
+      setOpen(list.length > 0);
     } catch {
       setResults([]);
     } finally {
@@ -32,7 +34,16 @@ export default function SearchBar({ watchlist = [], onAdd, limit = 25 }) {
     const val = e.target.value;
     setQuery(val);
     clearTimeout(timerRef.current);
+    if (!val.trim()) { setResults([]); setOpen(false); return; }
     timerRef.current = setTimeout(() => search(val), 220);
+  };
+
+  // Only close on blur if the user didn't click inside the dropdown
+  const handleBlur = () => {
+    setTimeout(() => {
+      if (!mouseDownInDropdown.current) setOpen(false);
+      mouseDownInDropdown.current = false;
+    }, 150);
   };
 
   const atLimit = watchlist.length >= limit;
@@ -54,7 +65,7 @@ export default function SearchBar({ watchlist = [], onAdd, limit = 25 }) {
           value={query}
           onChange={handleChange}
           onFocus={() => results.length > 0 && setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          onBlur={handleBlur}
           placeholder={atLimit ? `Watchlist full (${limit}/${limit})` : "Search stocks, ETFs, crypto…"}
           disabled={atLimit}
           style={{ ...input, opacity: atLimit ? 0.5 : 1, cursor: atLimit ? "not-allowed" : "text" }}
@@ -69,11 +80,14 @@ export default function SearchBar({ watchlist = [], onAdd, limit = 25 }) {
 
       {/* Dropdown */}
       {open && results.length > 0 && (
-        <div style={dropdown}>
+        <div
+          style={dropdown}
+          onMouseDown={() => { mouseDownInDropdown.current = true; }}
+        >
           {results.map(r => {
-            const already = watchlist.includes(r.symbol);
+            const already  = watchlist.includes(r.symbol);
             const disabled = already || atLimit;
-            const up      = (r.change_pct ?? 0) >= 0;
+            const up       = (r.change_pct ?? 0) >= 0;
             return (
               <div
                 key={r.symbol}
