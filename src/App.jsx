@@ -25,7 +25,8 @@ const DEFAULT_TICKERS = ["SPY","VOO","JEPI","JEPQ","SCHD","SGOV","MSFT","AAPL","
 export default function App() {
   const auth = useAuth();
   const [tab,            setTab]            = useState("prices");
-  const [watchlist,      setWatchlist]      = useState(DEFAULT_TICKERS);
+  const [watchlist,      setWatchlist]      = useState([]);
+  const [watchlistReady, setWatchlistReady] = useState(false);
   const [AdminPage,      setAdminPage]      = useState(null);
   const [portfolioValue, setPortfolioValue] = useState(null);
   const [tokenReady,     setTokenReady]     = useState(false);
@@ -60,8 +61,15 @@ export default function App() {
     console.log("[Auth] Token confirmed — loading watchlist + portfolio");
 
     getWatchlist()
-      .then(data => setWatchlist(data.symbols || DEFAULT_TICKERS))
-      .catch(() => setWatchlist(DEFAULT_TICKERS));
+      .then(data => {
+        setWatchlist(data.symbols?.length ? data.symbols : DEFAULT_TICKERS);
+        setWatchlistReady(true);
+      })
+      .catch(() => {
+        // Don't overwrite with defaults on error — only seed if nothing loaded yet
+        setWatchlist(prev => prev.length ? prev : DEFAULT_TICKERS);
+        setWatchlistReady(true);
+      });
     fetchPortfolioSummary();
 
     const iv = setInterval(fetchPortfolioSummary, 60000);
@@ -83,7 +91,15 @@ export default function App() {
     try { const d = await addToWatchlist(sym); setWatchlist(d.symbols); } catch {}
   };
   const handleRemove = async (sym) => {
-    try { const d = await removeFromWatchlist(sym); setWatchlist(d.symbols); } catch {}
+    // Optimistic update — remove immediately so the UI feels instant
+    setWatchlist(prev => prev.filter(s => s !== sym));
+    try {
+      const d = await removeFromWatchlist(sym);
+      setWatchlist(d.symbols); // sync with server's canonical list
+    } catch {
+      // Rollback — re-add the symbol if the API call failed
+      setWatchlist(prev => prev.includes(sym) ? prev : [...prev, sym]);
+    }
   };
 
   if (auth.user === undefined) return (
