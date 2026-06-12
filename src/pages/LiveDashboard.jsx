@@ -220,7 +220,7 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
           </div>
         </div>
 
-        <SearchBar watchlist={watchlist} onAdd={onAdd} limit={25} />
+        <SearchBar watchlist={watchlist} onAdd={onAdd} limit={50} />
 
         <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
           {tabs?.map(t => (
