@@ -4,18 +4,13 @@
 
 const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 
-// Token getter — set by App.jsx after auth state resolves
 let _getToken = () => Promise.resolve(null);
 export function setTokenGetter(fn) { _getToken = fn; }
 
-// Firebase auth instance — set once so we can always get fresh tokens
 let _firebaseAuth = null;
 export function setFirebaseAuth(auth) { _firebaseAuth = auth; }
 
 async function authHeaders() {
-  // Always get a fresh token directly from Firebase if available
-  // Firebase caches internally and only makes a network call when token expires
-  // This eliminates ALL race conditions between token setter and API calls
   let token = null;
   if (_firebaseAuth?.currentUser) {
     try {
@@ -24,7 +19,6 @@ async function authHeaders() {
       console.warn("[API] getIdToken failed:", e.message);
     }
   } else {
-    // Fallback to registered getter (for compatibility)
     token = await _getToken();
   }
   return token
@@ -32,7 +26,6 @@ async function authHeaders() {
     : { "Content-Type": "application/json" };
 }
 
-// ── Dev logging (only in development) ────────────────────────────────────────
 const IS_DEV = import.meta.env.DEV;
 function apiLog(method, path, status, ok) {
   if (!IS_DEV) return;
@@ -82,19 +75,15 @@ export const getSignals  = ()         => get("/api/signals");
 export const analyzeAll  = ()         => post("/api/signals/run-all");
 export const analyzeOne  = (symbol)   => get(`/api/signals/${symbol}`);
 export const deleteSignalSnapshot = (snapshotId) => del(`/api/signals/snapshot/${snapshotId}`);
-
-// Expose token getter for direct use in components that need raw auth headers
 export const getToken = () => _getToken();
-
-// On-demand signal — Live Prices Signal tab only (24h cache, insider + sentiment)
 export const getOnDemandSignal = (symbol) => post("/api/ondemand/signal", { symbol });
 
-// ── Watchlist (protected — requires auth) ────────────────────────────────────
-export const getWatchlist    = ()       => get("/api/watchlist/");
-export const addToWatchlist  = (symbol) => post(`/api/watchlist/${symbol}`);
+// ── Watchlist ─────────────────────────────────────────────────────────────────
+export const getWatchlist        = ()       => get("/api/watchlist/");
+export const addToWatchlist      = (symbol) => post(`/api/watchlist/${symbol}`);
 export const removeFromWatchlist = (symbol) => del(`/api/watchlist/${symbol}`);
 
-// ── Trader ────────────────────────────────────────────────────────────────────
+// ── Trader (legacy) ───────────────────────────────────────────────────────────
 export const getTrader   = ()         => get("/api/trader");
 export const getTrades   = ()         => get("/api/trader/trades");
 
@@ -112,25 +101,13 @@ export const sendChat = (message, watchlist = []) =>
 export function connectPriceStream(onMessage, onClose) {
   const WS = import.meta.env.VITE_WS_URL || "wss://signalboard.duckdns.org";
   const ws = new WebSocket(`${WS}/ws/prices`);
-
   ws.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      onMessage(data);
-    } catch (e) {
-      console.error("WS parse error", e);
-    }
+    try { onMessage(JSON.parse(event.data)); } catch (e) { console.error("WS parse error", e); }
   };
-
   ws.onclose = () => { if (onClose) onClose(); };
   ws.onerror = (e) => console.error("WS error", e);
-
   return ws;
 }
-
-// ── Portfolio / Auto-Trader ───────────────────────────────────────────────────
-// src/lib/api.js — v4 portfolio exports
-// Replace ALL previous portfolio exports with these
 
 // ── Portfolio v4 ──────────────────────────────────────────────────────────────
 export const getPortfolioOverview     = ()             => get("/api/portfolio/overview");
@@ -138,7 +115,6 @@ export const getPortfolioSummary      = ()             => get("/api/portfolio/su
 export const getStrategies            = ()             => get("/api/portfolio/strategies");
 export const getPortfolioTransactions = (limit = 50)   => get(`/api/portfolio/transactions?limit=${limit}`);
 
-// Manual trades — no strategy needed
 export const getManualPositions       = ()             => get("/api/portfolio/manual/positions");
 export const getManualTrades          = (limit = 50)   => get(`/api/portfolio/manual/trades?limit=${limit}`);
 export const manualBuy                = (symbol, { amountUsd, shares } = {}) =>
@@ -150,7 +126,6 @@ export const manualBuy                = (symbol, { amountUsd, shares } = {}) =>
 export const manualSell               = (symbol, shares = null) =>
   post("/api/portfolio/manual/sell", { symbol, ...(shares != null ? { shares } : {}) });
 
-// Strategy funds
 export const getStrategyPositions     = (sk)           => get(`/api/portfolio/strategy/${sk}/positions`);
 export const getStrategyTrades        = (sk, limit=50) => get(`/api/portfolio/strategy/${sk}/trades?limit=${limit}`);
 export const portfolioAcceptAgreement = ()             => post("/api/portfolio/agreement");
@@ -163,6 +138,8 @@ export const portfolioPause           = (strategy_key, paused) =>
 export const portfolioStop            = (strategy_key) =>
   post("/api/portfolio/stop", { strategy_key });
 
-// Admin
 export const getAutoTraderStatus      = ()             => get("/api/portfolio/admin/status");
 export const setKillSwitch            = (enabled)      => post("/api/portfolio/admin/kill-switch", { enabled });
+
+// ── CHANGE 4: market status — polled every 60s by useMarketStatus hook ────────
+export const getMarketStatus          = ()             => get("/api/market/status");
