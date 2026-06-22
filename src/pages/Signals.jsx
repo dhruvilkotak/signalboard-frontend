@@ -9,7 +9,7 @@ import InsiderActivity from "../components/signal/InsiderActivity";
 import SentimentBar    from "../components/signal/SentimentBar";
 import KeyFactors      from "../components/signal/KeyFactors";
 import BullBearCase    from "../components/signal/BullBearCase";
-import { deleteSignalSnapshot, getToken } from "../lib/api";
+import { deleteSignalSnapshot, getToken, triggerSignalJob, getSignalJobStatus, resetSignalCache } from "../lib/api";
 
 const API  = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 const MONO = "'IBM Plex Mono', monospace";
@@ -542,73 +542,207 @@ function Pill({ label, active, onClick }) {
 
 // ── Admin scan panel ──────────────────────────────────────────────────────────
 function AdminScanPanel({ onDone }) {
-  const [loading, setLoading] = useState(false);
-  const [result,  setResult]  = useState(null);
-  const [lastRun, setLastRun] = useState(null);
-  const [err,     setErr]     = useState(null);
+  const [jobStatus,   setJobStatus]   = useState(null);   // full job object from backend
+  const [triggering,  setTriggering]  = useState(false);  // POST in flight
+  const [refreshing,  setRefreshing]  = useState(false);  // GET feed in flight
+  const [resetting,   setResetting]   = useState(false);  // cache reset in flight
+  const [resetMsg,    setResetMsg]    = useState(null);   // reset result message
+  const [err,         setErr]         = useState(null);
+  const pollRef = useRef(null);
 
-  async function scan() {
-    setLoading(true); setErr(null); setResult(null);
+  // Poll job status every 3s while running
+  const startPolling = useCallback(() => {
+    if (pollRef.current) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const data = await getSignalJobStatus();
+        setJobStatus(data.job);
+        if (data.job.status !== "running") {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          // Auto-refresh feed 2s after job completes
+          if (data.job.status === "complete") {
+            setTimeout(() => onDone({}), 2000);
+          }
+        }
+      } catch (e) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    }, 3000);
+  }, [onDone]);
+
+  useEffect(() => {
+    // Load initial job status on mount
+    getSignalJobStatus().then(d => setJobStatus(d.job)).catch(() => {});
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
+  // Button 1 — Run signal job (async, fire and forget)
+  async function runJob() {
+    setTriggering(true); setErr(null);
     try {
-      const token = await getToken();
-      const res = await fetch(`${API}/api/signals/run-all?force=true`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      setResult(data);
-      setLastRun(new Date());
-      // Small delay to let Firestore writes propagate before reloading feed
-      setTimeout(() => onDone(data.signals || {}), 1500);
+      const data = await triggerSignalJob();
+      if (data.status === "already_running") {
+        setErr("Job already running — see status below");
+      }
+      // Fetch initial status then start polling
+      const st = await getSignalJobStatus();
+      setJobStatus(st.job);
+      startPolling();
     } catch (e) {
-      setErr(e.message);
+      setErr(e.message ?? "Failed to start job");
     } finally {
-      setLoading(false);
+      setTriggering(false);
     }
   }
+
+  // Button 2 — Refresh feed (fast GET, just reloads cached signals)
+  async function refreshFeed() {
+    setRefreshing(true); setErr(null);
+    try { await onDone({}); }
+    catch (e) { setErr(e.message ?? "Refresh failed"); }
+    finally { setRefreshing(false); }
+  }
+
+  // Button 3 — Reset cache (clears in-memory signal cache server-side)
+  async function handleResetCache() {
+    if (!window.confirm("Clear ALL in-memory signal caches on the server?\n\nThis forces next signal request to re-fetch from Firestore or regenerate. Does NOT delete Firestore documents.")) return;
+    setResetting(true); setResetMsg(null); setErr(null);
+    try {
+      const data = await resetSignalCache();
+      setResetMsg(`✓ Cleared — ${data.ondemand_cleared} ondemand + ${data.scheduled_cleared} scheduled`);
+    } catch (e) {
+      setResetMsg(`✗ ${e.message ?? "Reset failed"}`);
+    } finally {
+      setResetting(false);
+      setTimeout(() => setResetMsg(null), 6000);
+    }
+  }
+
+  const isRunning  = jobStatus?.status === "running";
+  const isComplete = jobStatus?.status === "complete";
+  const isFailed   = jobStatus?.status === "failed";
+  const r          = jobStatus?.result ?? {};
+
+  const statusColor = isRunning ? "#e3b341" : isComplete ? "#3fb950" : isFailed ? "#f85149" : "#6e7681";
+  const statusLabel = isRunning ? "⟳ Running…"
+    : isComplete ? `✓ Done — ${r.written ?? 0} written`
+    : isFailed   ? `✗ Failed`
+    : jobStatus?.status === "idle" ? "Idle" : "—";
 
   return (
     <div className="card" style={{
       marginBottom: 12, padding: "12px 16px",
       border: "1px solid #388bfd40", background: "#388bfd06",
     }}>
+      {/* Header row */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <span style={{ fontSize: 10, color: "#58a6ff", fontFamily: MONO, fontWeight: 700 }}>⚙ ADMIN</span>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 12, color: "var(--text1)", marginBottom: 2 }}>Scan & Refresh Signals</div>
+          <div style={{ fontSize: 12, color: "var(--text1)", marginBottom: 2 }}>Signal Engine Control</div>
           <div style={{ fontFamily: MONO, fontSize: 9, color: "var(--text3)" }}>
             Force-regenerates signals using real RSI/MACD + SEC insider + StockTwits.
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-          {lastRun && (
-            <span style={{ fontFamily: MONO, fontSize: 9, color: "var(--text3)" }}>
-              Last: {lastRun.toLocaleTimeString()}
-            </span>
-          )}
-          {err && <span style={{ fontFamily: MONO, fontSize: 9, color: "var(--red)" }}>{err}</span>}
-          <button className="btn btn-primary" onClick={scan} disabled={loading}
-            style={{ minWidth: 160, fontFamily: MONO, fontSize: 11 }}>
-            {loading ? "⟳ Scanning…" : "🔍 Scan & Refresh"}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {/* Button 2 — Refresh feed (fast, just GET cached) */}
+          <button onClick={refreshFeed} disabled={refreshing}
+            style={{ padding: "6px 14px", borderRadius: 6, fontFamily: MONO, fontSize: 11,
+              background: "transparent", border: "1px solid #30363d",
+              color: refreshing ? "#6e7681" : "#8b949e", cursor: refreshing ? "not-allowed" : "pointer" }}>
+            {refreshing ? "⟳" : "↻"} Refresh Feed
+          </button>
+          {/* Button 3 — Reset cache */}
+          <button onClick={handleResetCache} disabled={resetting}
+            style={{ padding: "6px 14px", borderRadius: 6, fontFamily: MONO, fontSize: 11,
+              background: "transparent", border: "1px solid #f8514930",
+              color: resetting ? "#6e7681" : "#f85149",
+              cursor: resetting ? "not-allowed" : "pointer",
+              opacity: resetting ? 0.6 : 1 }}>
+            {resetting ? "⟳ Clearing…" : "🗑 Reset Cache"}
+          </button>
+          {/* Button 1 — Run signal job (async) */}
+          <button onClick={runJob} disabled={triggering || isRunning}
+            style={{ padding: "6px 16px", borderRadius: 6, fontFamily: MONO, fontSize: 11,
+              fontWeight: 700, border: "none", cursor: (triggering || isRunning) ? "not-allowed" : "pointer",
+              background: isRunning ? "#e3b34120" : "#388bfd20",
+              color: isRunning ? "#e3b341" : "#58a6ff",
+              opacity: (triggering || isRunning) ? 0.7 : 1 }}>
+            {triggering ? "Starting…" : isRunning ? "⟳ Running…" : "🔍 Run Signal Job"}
           </button>
         </div>
       </div>
-      {result && !loading && (
-        <div style={{ marginTop: 10, display: "flex", gap: 16, flexWrap: "wrap" }}>
+
+      {/* Status bar */}
+      <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10,
+        padding: "7px 10px", borderRadius: 6, background: "#0d1117",
+        border: `1px solid ${statusColor}30` }}>
+        <span style={{ fontFamily: MONO, fontSize: 10, color: statusColor, fontWeight: 700, minWidth: 120 }}>
+          {statusLabel}
+        </span>
+        {jobStatus?.started_at && (
+          <span style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681" }}>
+            Started: {new Date(jobStatus.started_at).toLocaleTimeString()}
+          </span>
+        )}
+        {jobStatus?.completed_at && !isRunning && (
+          <span style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681" }}>
+            · Ended: {new Date(jobStatus.completed_at).toLocaleTimeString()}
+          </span>
+        )}
+        {r.duration_ms > 0 && (
+          <span style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681" }}>
+            · {(r.duration_ms / 1000).toFixed(1)}s
+          </span>
+        )}
+        {isFailed && jobStatus?.error && (
+          <span style={{ fontFamily: MONO, fontSize: 9, color: "#f85149" }}>
+            {jobStatus.error}
+          </span>
+        )}
+      </div>
+
+      {/* Metrics grid — shown after job completes */}
+      {(isComplete || (r.total > 0)) && (
+        <div style={{ marginTop: 8, display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(70px, 1fr))", gap: 6 }}>
           {[
-            ["Generated", result.generated ?? 0, "#8b949e"],
-            ["Symbols",   (result.symbols || []).length, "#58a6ff"],
+            ["Total",    r.total,    "#8b949e"],
+            ["BUY",      r.buy,      "#3fb950"],
+            ["SELL",     r.sell,     "#f85149"],
+            ["HOLD",     r.hold,     "#6e7681"],
+            ["HIGH",     r.high,     "#0fffa3"],
+            ["MEDIUM",   r.medium,   "#e3b341"],
+            ["LOW",      r.low,      "#6e7681"],
+            ["Written",  r.written,  "#58a6ff"],
+            ["Skipped",  r.skipped,  "#6e7681"],
+            ["Feed",     r.feed_eligible, "#8b949e"],
           ].map(([label, val, color]) => (
-            <div key={label} style={{ display: "flex", gap: 5, alignItems: "center" }}>
-              <span style={{ fontFamily: MONO, fontSize: 8, color: "#6e7681" }}>{label}</span>
-              <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color }}>{val}</span>
+            <div key={label} style={{ textAlign: "center", padding: "5px 4px",
+              background: "#161b22", borderRadius: 5, border: "1px solid #21262d" }}>
+              <div style={{ fontFamily: MONO, fontSize: 8, color: "#6e7681", marginBottom: 2 }}>{label}</div>
+              <div style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color }}>{val ?? 0}</div>
             </div>
           ))}
         </div>
+      )}
+
+      {r.failed_count > 0 && (
+        <div style={{ marginTop: 6, fontFamily: MONO, fontSize: 9, color: "#f85149" }}>
+          ⚠ {r.failed_count} symbols failed: {(r.failed_symbols || []).join(", ")}
+        </div>
+      )}
+
+      {resetMsg && (
+        <div style={{ marginTop: 6, fontFamily: MONO, fontSize: 9,
+          color: resetMsg.startsWith("✓") ? "#3fb950" : "#f85149" }}>
+          {resetMsg}
+        </div>
+      )}
+
+      {err && (
+        <div style={{ marginTop: 6, fontFamily: MONO, fontSize: 9, color: "#f85149" }}>{err}</div>
       )}
     </div>
   );

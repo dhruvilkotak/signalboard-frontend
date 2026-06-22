@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import NewsTab from "../components/NewsTab";
 import SearchBar from "../components/SearchBar";
 import SignalTab from "../components/SignalTab";
+import { useAuthContext } from "../App";
 import PortfolioTab from "../components/PortfolioTab";
 
 const API    = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
@@ -146,6 +147,7 @@ function TickerRow({ symbol, price, selected, onClick, onRemove }) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, tabs, activeTab }) {
   const { prices, status, lastUpdate, refresh } = usePrices(watchlist);
+  const { isAdmin } = useAuthContext();
   const [selected,   setSelected]   = useState(watchlist[6] || watchlist[0] || "MSFT");
   const [innerTab,   setInnerTab]   = useState("chart");
   const [interval,   setIntervalV]  = useState("D");
@@ -413,6 +415,7 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
                 key={selected}
                 symbol={selected}
                 currentPrice={price?.price}
+                isAdmin={isAdmin}
               />
             </div>
             {/* ── Portfolio tab ── */}

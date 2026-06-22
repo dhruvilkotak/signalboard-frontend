@@ -8,7 +8,7 @@ import {
   AreaChart, Area, LineChart, Line,
   XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer,
 } from "recharts";
-import { getOnDemandSignal } from "../lib/api";
+import { getOnDemandSignal, forceRegenerateSignal } from "../lib/api";
 import InsiderActivity from "./signal/InsiderActivity";
 import SentimentBar from "./signal/SentimentBar";
 import KeyFactors from "./signal/KeyFactors";
@@ -146,19 +146,21 @@ function Skeleton({ symbol }) {
 }
 
 // ── Main SignalTab ────────────────────────────────────────────────────────────
-export default function SignalTab({ symbol, currentPrice }) {
-  const [signal,  setSignal]  = useState(null);
-  const [loading, setLoading] = useState(true);   // start true — auto-loads on mount
-  const [error,   setError]   = useState(null);
+export default function SignalTab({ symbol, currentPrice, isAdmin = false }) {
+  const [signal,   setSignal]   = useState(null);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState(null);
+  const [forcing,  setForcing]  = useState(false);   // admin force regenerate in flight
+  const [forceMsg, setForceMsg] = useState(null);    // success/error after force
   const debounceRef = useRef(null);
 
   // Auto-load on mount and when symbol changes — 300ms debounce
   useEffect(() => {
     setSignal(null);
     setError(null);
+    setForceMsg(null);
     setLoading(true);
 
-    // Clear any pending debounce from rapid ticker switching
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     debounceRef.current = setTimeout(async () => {
@@ -176,6 +178,22 @@ export default function SignalTab({ symbol, currentPrice }) {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [symbol]);
+
+  // Admin — force regenerate bypassing 24h cache
+  async function handleForceRegenerate() {
+    setForcing(true); setForceMsg(null);
+    try {
+      const data = await forceRegenerateSignal(symbol);
+      setSignal(data);
+      setError(null);
+      setForceMsg({ type: "ok", text: `✓ Force regenerated — ${data.signal} ${data.confidence}` });
+    } catch (e) {
+      setForceMsg({ type: "err", text: `✗ Failed: ${e.message}` });
+    } finally {
+      setForcing(false);
+      setTimeout(() => setForceMsg(null), 5000);
+    }
+  }
 
   const colors = signal ? (SIG_COLOR[signal.signal] || SIG_COLOR.HOLD) : null;
   const cache  = signal ? cacheStatus(signal) : null;
@@ -203,6 +221,35 @@ export default function SignalTab({ symbol, currentPrice }) {
   // ── Signal result ──────────────────────────────────────────────────────────
   return (
     <div style={{ height: "100%", overflowY: "auto", padding: 20, background: "#0d1117" }}>
+
+      {/* ── Admin force regenerate bar ── */}
+      {isAdmin && (
+        <div style={{
+          marginBottom: 10, padding: "7px 10px", borderRadius: 6,
+          background: "#388bfd08", border: "1px solid #388bfd30",
+          display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <span style={{ fontFamily: MONO, fontSize: 9, color: "#58a6ff", fontWeight: 700 }}>⚙ ADMIN</span>
+          <span style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681", flex: 1 }}>
+            Force regenerate bypasses 24h cache — generates fresh signal now
+          </span>
+          {forceMsg && (
+            <span style={{ fontFamily: MONO, fontSize: 9,
+              color: forceMsg.type === "ok" ? "#3fb950" : "#f85149" }}>
+              {forceMsg.text}
+            </span>
+          )}
+          <button onClick={handleForceRegenerate} disabled={forcing || loading}
+            style={{ padding: "4px 12px", borderRadius: 5, fontFamily: MONO, fontSize: 10,
+              fontWeight: 700, border: "1px solid #388bfd50",
+              background: forcing ? "#388bfd10" : "#388bfd18",
+              color: forcing ? "#6e7681" : "#58a6ff",
+              cursor: (forcing || loading) ? "not-allowed" : "pointer",
+              opacity: (forcing || loading) ? 0.6 : 1 }}>
+            {forcing ? "⟳ Regenerating…" : "⚡ Force Regenerate"}
+          </button>
+        </div>
+      )}
 
       {/* ── Cache status bar ── */}
       <div style={{
