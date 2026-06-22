@@ -569,7 +569,7 @@ function AdminScanPanel({ onDone }) {
         clearInterval(pollRef.current);
         pollRef.current = null;
       }
-    }, 3000);
+    }, 20_000);
   }, [onDone]);
 
   useEffect(() => {
