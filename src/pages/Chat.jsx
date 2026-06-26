@@ -161,7 +161,10 @@ export default function Chat({ watchlist = [] }) {
     try {
       const res = await fetch(`${API}/api/chat/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({ question: q, symbol: symbol || null }),
       });
 
