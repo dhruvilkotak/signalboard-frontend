@@ -1,5 +1,6 @@
 // src/pages/Chat.jsx
 import { useState, useRef, useEffect } from "react";
+import { getToken } from "../lib/api";
 
 const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 
@@ -159,6 +160,7 @@ export default function Chat({ watchlist = [] }) {
     setError(null);
 
     try {
+      const token = await getToken();
       const res = await fetch(`${API}/api/chat/`, {
         method: "POST",
         headers: { 
