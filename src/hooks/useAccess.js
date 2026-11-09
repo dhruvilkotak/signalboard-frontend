@@ -54,9 +54,11 @@ export function useAccessLoader() {
     const id = setInterval(refresh, REFRESH_MS);
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
+    window.addEventListener("signalboard:access-changed", onFocus);
     return () => {
       clearInterval(id);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("signalboard:access-changed", onFocus);
     };
   }, [refresh]);
 }

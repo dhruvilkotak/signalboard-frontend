@@ -58,6 +58,7 @@ export class ApiError extends Error {
 // App-wide events other components listen for (TermsGate, paywall UI).
 export const TERMS_REQUIRED_EVENT = "signalboard:terms-required";
 export const PAYWALL_EVENT        = "signalboard:paywall";
+export const ACCESS_CHANGED_EVENT = "signalboard:access-changed";
 
 async function toApiError(method, path, res) {
   const body = await res.json().catch(() => null);
@@ -117,7 +118,11 @@ export const deleteSignalSnapshot = (snapshotId) => del(`/api/signals/snapshot/$
 export const getToken = () => _getToken();
 
 // On-demand signal — Live Prices Signal tab only (24h cache, insider + sentiment)
-export const getOnDemandSignal = (symbol) => post("/api/ondemand/signal", { symbol });
+export const getOnDemandSignal = (symbol) =>
+  post("/api/ondemand/signal", { symbol }).then(res => {
+    if (res?.quota) window.dispatchEvent(new Event(ACCESS_CHANGED_EVENT));   // refresh "signals left"
+    return res;
+  });
 
 // ── Watchlist (protected — requires auth) ────────────────────────────────────
 export const getWatchlist    = ()       => get("/api/watchlist/");
