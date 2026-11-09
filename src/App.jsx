@@ -14,6 +14,8 @@ import Trader        from "./pages/Trader";
 import Chat          from "./pages/Chat";
 import UserGuide     from "./pages/UserGuide";
 import TermsGate     from "./components/TermsGate";
+import PaywallModal  from "./components/PaywallModal";
+import QuotaChip     from "./components/QuotaChip";
 import { useFeatureFlagsLoader, useFeatureFlagStore } from "./hooks/useFeatureFlags";
 import { useAccessLoader, useAccessStore } from "./hooks/useAccess";
 
@@ -156,6 +158,7 @@ export default function App() {
                 <span style={{ fontSize: 9, color: "#6e7681", fontFamily: "'Space Mono',monospace" }}>PAPER</span>
               </button>
             )}
+            <QuotaChip />
             <span style={wsStatus}>{connected ? "🟢 Live" : "🔴 Offline"}</span>
             {auth.idleWarning && (
               <span style={{ fontSize:11, color:"#f0a000", background:"#f0a00015", border:"1px solid #f0a00040", borderRadius:4, padding:"2px 8px" }}>
@@ -186,6 +189,7 @@ export default function App() {
           {tab === "admin"   && !auth.isAdmin && <div style={denied}>Access denied.</div>}
         </main>
       </div>
+      <PaywallModal />
       </TermsGate>
     </AuthContext.Provider>
   );
