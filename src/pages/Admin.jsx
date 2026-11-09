@@ -13,6 +13,7 @@ import { auth } from "../lib/firebase";
 import { getAutoTraderStatus, setKillSwitch } from "../lib/api";
 import FeatureFlagsPanel from "../components/admin/FeatureFlagsPanel";
 import LegalAdminPanel from "../components/admin/LegalAdminPanel";
+import RolesPanel from "../components/admin/RolesPanel";
 
 const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 
@@ -45,6 +46,7 @@ export default function Admin() {
           { id: "autotrader", label: "🤖 Auto-Trader" },
           { id: "flags",      label: "🚩 Feature Flags" },
           { id: "legal",      label: "📜 Terms" },
+          { id: "roles",      label: "👑 Roles" },
         ].map(t => (
           <button
             key={t.id}
@@ -62,6 +64,7 @@ export default function Admin() {
         {activeTab === "autotrader" && <AutoTraderAdmin />}
         {activeTab === "flags"      && <FeatureFlagsPanel />}
         {activeTab === "legal"      && <LegalAdminPanel />}
+        {activeTab === "roles"      && <RolesPanel />}
       </div>
     </div>
   );
