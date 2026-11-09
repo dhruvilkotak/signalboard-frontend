@@ -1,11 +1,28 @@
 // src/components/TermsModal.jsx
-// Scroll-to-bottom modal — agree button enables only after user scrolls to end
+// Scroll-to-bottom modal — agree button enables only after user scrolls to end.
+//
+// To publish new Terms:
+//   1. Edit the text below and bump TERMS_VERSION / TERMS_EFFECTIVE. Deploy.
+//   2. Admin → 📜 Terms → publish the same version with a summary of changes.
+// Signed-in users then see this modal in "update" mode until they accept.
 
 import { useState, useRef, useEffect } from "react";
 
-export default function TermsModal({ onAccept, onClose }) {
+export const TERMS_VERSION   = "v1.0";
+export const TERMS_EFFECTIVE = "May 25, 2026";
+
+export default function TermsModal({
+  onAccept,
+  onClose,                 // signup mode: "Cancel"
+  onDecline,               // update mode: "Sign out" (no ✕, no click-away)
+  mode = "signup",         // "signup" | "update"
+  summary = "",            // update mode: what changed
+  busy = false,
+  error = null,
+}) {
   const [scrolled, setScrolled] = useState(false);
   const bodyRef = useRef(null);
+  const isUpdate = mode === "update";
 
   const handleScroll = () => {
     const el = bodyRef.current;
@@ -20,13 +37,28 @@ export default function TermsModal({ onAccept, onClose }) {
     return () => el?.removeEventListener("scroll", handleScroll);
   }, []);
 
+  const canAgree = scrolled && !busy;
+
   return (
     <div style={s.overlay}>
       <div style={s.modal}>
         <div style={s.header}>
-          <h2 style={s.title}>Terms of Use & Privacy Policy</h2>
-          <button style={s.close} onClick={onClose}>✕</button>
+          <h2 style={s.title}>
+            {isUpdate ? "We've updated our Terms" : "Terms of Use & Privacy Policy"}
+          </h2>
+          {!isUpdate && <button style={s.close} onClick={onClose}>✕</button>}
         </div>
+
+        {isUpdate && (
+          <div style={s.summary}>
+            <div style={{ fontWeight: 600, color: "#e6edf3", marginBottom: 4 }}>
+              What changed in {TERMS_VERSION}
+            </div>
+            <div style={{ whiteSpace: "pre-wrap" }}>
+              {summary || "Please review the updated Terms of Use & Privacy Policy below."}
+            </div>
+          </div>
+        )}
 
         <div style={s.body} ref={bodyRef}>
           <h3 style={s.h3}>1. Service Description</h3>
@@ -64,25 +96,28 @@ export default function TermsModal({ onAccept, onClose }) {
           <p style={s.p}>Questions about these terms? Contact us at <strong>kotakdhruvil@gmail.com</strong></p>
 
           <p style={{ ...s.p, marginTop:"2rem", fontSize:11, color:"#6e7681" }}>
-            Version 1.0 · Effective May 25, 2026
+            Version {TERMS_VERSION.replace(/^v/, "")} · Effective {TERMS_EFFECTIVE}
           </p>
         </div>
 
-        {/* Scroll hint */}
         {!scrolled && (
-          <div style={s.hint}>
-            ↓ Scroll to the bottom to enable agreement
-          </div>
+          <div style={s.hint}>↓ Scroll to the bottom to enable agreement</div>
         )}
 
+        {error && <div style={s.error}>{error}</div>}
+
         <div style={s.footer}>
-          <button style={s.btnCancel} onClick={onClose}>Cancel</button>
+          {isUpdate ? (
+            <button style={s.btnCancel} onClick={onDecline} disabled={busy}>Sign out</button>
+          ) : (
+            <button style={s.btnCancel} onClick={onClose}>Cancel</button>
+          )}
           <button
-            style={{ ...s.btnAgree, opacity: scrolled ? 1 : 0.4, cursor: scrolled ? "pointer" : "not-allowed" }}
-            onClick={() => scrolled && onAccept()}
-            disabled={!scrolled}
+            style={{ ...s.btnAgree, opacity: canAgree ? 1 : 0.4, cursor: canAgree ? "pointer" : "not-allowed" }}
+            onClick={() => canAgree && onAccept()}
+            disabled={!canAgree}
           >
-            ✓ I Have Read and Agree
+            {busy ? "Saving…" : "✓ I Have Read and Agree"}
           </button>
         </div>
       </div>
@@ -96,10 +131,12 @@ const s = {
   header:    { display:"flex", alignItems:"center", justifyContent:"space-between", padding:"1.25rem 1.5rem", borderBottom:"1px solid #30363d", flexShrink:0 },
   title:     { fontSize:16, fontWeight:700, color:"#e6edf3", margin:0 },
   close:     { background:"none", border:"none", color:"#8b949e", fontSize:18, cursor:"pointer", padding:0 },
+  summary:   { margin:"1rem 1.5rem 0", padding:"10px 14px", background:"#388bfd14", border:"1px solid #388bfd55", borderRadius:6, fontSize:13, color:"#8b949e", lineHeight:1.6, flexShrink:0 },
   body:      { flex:1, overflowY:"auto", padding:"1.25rem 1.5rem" },
   h3:        { fontSize:14, fontWeight:600, color:"#e6edf3", margin:"1.25rem 0 0.5rem" },
   p:         { fontSize:13, color:"#8b949e", lineHeight:1.7, margin:"0 0 0.75rem" },
   hint:      { textAlign:"center", fontSize:12, color:"#f0a000", padding:"8px", background:"#f0a00010", borderTop:"1px solid #f0a00030", flexShrink:0 },
+  error:     { margin:"0 1.5rem", marginTop:8, padding:"8px 12px", background:"#3d1515", border:"1px solid #f85149", borderRadius:6, color:"#f85149", fontSize:12, flexShrink:0 },
   footer:    { display:"flex", gap:8, padding:"1rem 1.5rem", borderTop:"1px solid #30363d", flexShrink:0 },
   btnCancel: { flex:1, padding:"9px", background:"transparent", border:"1px solid #30363d", borderRadius:6, color:"#8b949e", fontSize:13, cursor:"pointer" },
   btnAgree:  { flex:2, padding:"9px", background:"#238636", border:"1px solid #2ea043", borderRadius:6, color:"#fff", fontSize:13, fontWeight:600, transition:"opacity 0.2s" },

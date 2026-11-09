@@ -12,6 +12,7 @@ import { useAuthContext } from "../App";
 import { auth } from "../lib/firebase";
 import { getAutoTraderStatus, setKillSwitch } from "../lib/api";
 import FeatureFlagsPanel from "../components/admin/FeatureFlagsPanel";
+import LegalAdminPanel from "../components/admin/LegalAdminPanel";
 
 const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 
@@ -43,6 +44,7 @@ export default function Admin() {
           { id: "links",   label: "🔗 Quick Links" },
           { id: "autotrader", label: "🤖 Auto-Trader" },
           { id: "flags",      label: "🚩 Feature Flags" },
+          { id: "legal",      label: "📜 Terms" },
         ].map(t => (
           <button
             key={t.id}
@@ -59,6 +61,7 @@ export default function Admin() {
         {activeTab === "links"   && <QuickLinks />}
         {activeTab === "autotrader" && <AutoTraderAdmin />}
         {activeTab === "flags"      && <FeatureFlagsPanel />}
+        {activeTab === "legal"      && <LegalAdminPanel />}
       </div>
     </div>
   );

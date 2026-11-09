@@ -13,12 +13,27 @@ import Signals       from "./pages/Signals";
 import Trader        from "./pages/Trader";
 import Chat          from "./pages/Chat";
 import UserGuide     from "./pages/UserGuide";
+import TermsGate     from "./components/TermsGate";
+import { useFeatureFlagsLoader, useFeatureFlagStore } from "./hooks/useFeatureFlags";
+import { useAccessLoader, useAccessStore } from "./hooks/useAccess";
 
 // Wire Firebase auth into api.js immediately — eliminates token race condition
 setFirebaseAuth(firebaseAuth);
 
 export const AuthContext = createContext(null);
 export const useAuthContext = () => useContext(AuthContext);
+
+// Loads feature flags + access for the signed-in user. Rendered only after
+// login + approval, so the first fetch always has a user; clears on sign-out.
+function SignedInHooks() {
+  useFeatureFlagsLoader();
+  useAccessLoader();
+  useEffect(() => () => {
+    useFeatureFlagStore.getState().reset();
+    useAccessStore.getState().reset();
+  }, []);
+  return null;
+}
 
 const DEFAULT_TICKERS = ["SPY","VOO","JEPI","JEPQ","SCHD","SGOV","MSFT","AAPL","NVDA","GOOGL","AMZN","META","HOOD"];
 
@@ -122,6 +137,8 @@ export default function App() {
 
   return (
     <AuthContext.Provider value={auth}>
+      <SignedInHooks />
+      <TermsGate>
       <div style={appWrap}>
         <header style={header}>
           <span style={logoText}>SignalBoard</span>
@@ -169,6 +186,7 @@ export default function App() {
           {tab === "admin"   && !auth.isAdmin && <div style={denied}>Access denied.</div>}
         </main>
       </div>
+      </TermsGate>
     </AuthContext.Provider>
   );
 }
