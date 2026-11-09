@@ -40,13 +40,43 @@ function apiLog(method, path, status, ok) {
   console.log(`%c[API] ${method} ${path} → ${status}`, style);
 }
 
+// ── Errors ───────────────────────────────────────────────────────────────────
+// Thrown for any non-2xx response. Message keeps the old "GET /path → 402"
+// format so existing catch blocks keep working; new code can read
+// err.status, err.code ("PAYWALL", "TERMS_REQUIRED", ...) and err.detail.
+export class ApiError extends Error {
+  constructor(method, path, status, body) {
+    super(`${method} ${path} → ${status}`);
+    this.name   = "ApiError";
+    this.status = status;
+    this.body   = body;
+    this.detail = body?.detail;
+    this.code   = typeof body?.detail === "object" ? body.detail?.code : undefined;
+  }
+}
+
+// App-wide events other components listen for (TermsGate, paywall UI).
+export const TERMS_REQUIRED_EVENT = "signalboard:terms-required";
+export const PAYWALL_EVENT        = "signalboard:paywall";
+
+async function toApiError(method, path, res) {
+  const body = await res.json().catch(() => null);
+  const err  = new ApiError(method, path, res.status, body);
+  if (res.status === 403 && err.code === "TERMS_REQUIRED") {
+    window.dispatchEvent(new Event(TERMS_REQUIRED_EVENT));
+  } else if (res.status === 402 && err.code === "PAYWALL") {
+    window.dispatchEvent(new CustomEvent(PAYWALL_EVENT, { detail: err.detail }));
+  }
+  return err;
+}
+
 async function get(path) {
   const headers = await authHeaders();
   const hasToken = !!headers.Authorization;
   if (IS_DEV && !hasToken) console.warn(`[API] GET ${path} — no auth token`);
   const res = await fetch(`${API}${path}`, { headers });
   apiLog("GET", path, res.status, res.ok);
-  if (!res.ok) throw new Error(`GET ${path} → ${res.status}`);
+  if (!res.ok) throw await toApiError("GET", path, res);
   return res.json();
 }
 
@@ -60,7 +90,7 @@ async function post(path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   apiLog("POST", path, res.status, res.ok);
-  if (!res.ok) throw new Error(`POST ${path} → ${res.status}`);
+  if (!res.ok) throw await toApiError("POST", path, res);
   return res.json();
 }
 
@@ -68,7 +98,7 @@ async function del(path) {
   const headers = await authHeaders();
   const res = await fetch(`${API}${path}`, { method: "DELETE", headers });
   apiLog("DELETE", path, res.status, res.ok);
-  if (!res.ok) throw new Error(`DELETE ${path} → ${res.status}`);
+  if (!res.ok) throw await toApiError("DELETE", path, res);
   return res.json();
 }
 

@@ -9,7 +9,7 @@ import {
 } from "firebase/auth";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, provider, db } from "../lib/firebase";
-import TermsModal from "../components/TermsModal";
+import TermsModal, { TERMS_VERSION } from "../components/TermsModal";
 
 const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
 
@@ -91,6 +91,7 @@ export default function Signup({ onBackToLogin }) {
       agreed_terms_version: "v1.0",
       agreed_terms_at:      serverTimestamp(),
       provider:             providerName,
+      agreed_terms_version: TERMS_VERSION,
     });
   };
 
