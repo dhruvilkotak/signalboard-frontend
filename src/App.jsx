@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, createContext, useContext } from "react";
 import { useAuth } from "./hooks/useAuth";
 import { auth as firebaseAuth } from "./lib/firebase";
-import { setTokenGetter, setFirebaseAuth, getWatchlist, addToWatchlist, removeFromWatchlist, getPortfolioOverview } from "./lib/api";
+import { PAYWALL_EVENT, setTokenGetter, setFirebaseAuth, getWatchlist, addToWatchlist, removeFromWatchlist, getPortfolioOverview } from "./lib/api";
 import { usePrices } from "./hooks/usePrices";
 
 import Login         from "./pages/Login";
@@ -16,8 +16,9 @@ import UserGuide     from "./pages/UserGuide";
 import TermsGate     from "./components/TermsGate";
 import PaywallModal  from "./components/PaywallModal";
 import QuotaChip     from "./components/QuotaChip";
+import TrialChip     from "./components/TrialChip";
 import { useFeatureFlagsLoader, useFeatureFlagStore } from "./hooks/useFeatureFlags";
-import { useAccessLoader, useAccessStore } from "./hooks/useAccess";
+import { useAccessLoader, useAccessStore, useAccess } from "./hooks/useAccess";
 
 // Wire Firebase auth into api.js immediately — eliminates token race condition
 setFirebaseAuth(firebaseAuth);
@@ -37,10 +38,15 @@ function SignedInHooks() {
   return null;
 }
 
+// Tabs that need a feature (7-day trial). Locked tabs open the paywall instead.
+// Auto-Trader stays open: manual trading is free; starting a strategy is gated by the backend.
+const TAB_FEATURE = { signals: "ai_signals", chat: "ai_chat" };
+
 const DEFAULT_TICKERS = ["SPY","VOO","JEPI","JEPQ","SCHD","SGOV","MSFT","AAPL","NVDA","GOOGL","AMZN","META","HOOD"];
 
 export default function App() {
   const auth = useAuth();
+  const { hasFeature } = useAccess();
   const [tab,            setTab]            = useState("prices");
   const [watchlist,      setWatchlist]      = useState([]);
   const [watchlistReady, setWatchlistReady] = useState(false);
@@ -94,6 +100,11 @@ export default function App() {
   }, [auth.token, auth.isPending, fetchPortfolioSummary]);
 
   const handleTabChange = (newTab) => {
+    const feature = TAB_FEATURE[newTab];
+    if (feature && !hasFeature(feature)) {
+      window.dispatchEvent(new CustomEvent(PAYWALL_EVENT, { detail: { feature } }));
+      return;
+    }
     setTab(newTab);
     if (newTab === "trader") fetchPortfolioSummary(); // instant header refresh on trader tab
   };
@@ -127,9 +138,9 @@ export default function App() {
 
   const TABS = [
     { id: "prices",  label: "Live Prices" },
-    { id: "signals", label: "AI Signals"  },
+    { id: "signals", label: hasFeature("ai_signals") ? "AI Signals" : "🔒 AI Signals" },
     { id: "trader",  label: "Auto-Trader" },
-    { id: "chat",    label: "AI Chat"     },
+    { id: "chat",    label: hasFeature("ai_chat")    ? "AI Chat"    : "🔒 AI Chat"    },
     { id: "guide",   label: "📖 Guide"    },
     ...(auth.isAdmin ? [{ id: "admin", label: "⚙ Admin" }] : []),
   ];
@@ -158,6 +169,7 @@ export default function App() {
                 <span style={{ fontSize: 9, color: "#6e7681", fontFamily: "'Space Mono',monospace" }}>PAPER</span>
               </button>
             )}
+            <TrialChip />
             <QuotaChip />
             <span style={wsStatus}>{connected ? "🟢 Live" : "🔴 Offline"}</span>
             {auth.idleWarning && (
