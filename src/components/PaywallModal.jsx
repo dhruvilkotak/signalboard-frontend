@@ -9,6 +9,7 @@
 // With neither on, users are told to contact the admin.
 
 import { useEffect, useState } from "react";
+import { startCheckout, PRICE_LABEL } from "../lib/billing";
 import { PAYWALL_EVENT } from "../lib/api";
 import { useFlag } from "../hooks/useFeatureFlags";
 import { useAccessStore } from "../hooks/useAccess";
@@ -28,6 +29,8 @@ const FEATURE_TEXT = {
 
 export default function PaywallModal() {
   const [detail, setDetail] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
   const billingOn = useFlag("billing");
   const couponsOn = useFlag("coupons");
 
@@ -62,9 +65,21 @@ export default function PaywallModal() {
 
         <div style={s.actions}>
           {billingOn && (
-            <button style={s.btnPrimary} onClick={() => { close(); window.location.hash = "#/pricing"; }}>
-              Subscribe · $20/month
-            </button>
+            <>
+              <button style={{ ...s.btnPrimary, opacity: busy ? 0.6 : 1 }} disabled={busy}
+                onClick={async () => {
+                  setBusy(true); setError(null);
+                  const err = await startCheckout();          // redirects to Stripe on success
+                  if (err) { setError(err); setBusy(false); }
+                }}>
+                {busy ? "Opening checkout…" : `Subscribe · ${PRICE_LABEL}`}
+              </button>
+              <div style={s.fine}>
+                Secure checkout by Stripe · cards, Apple Pay, Google Pay · cancel anytime from your account;
+                access continues to the end of the paid month, no partial refunds.
+              </div>
+              {error && <div style={s.err}>{error}</div>}
+            </>
           )}
           {couponsOn && (
             <button style={s.btnSecondary}
@@ -97,5 +112,7 @@ const s = {
   actions:      { display:"flex", flexDirection:"column", gap:8 },
   btnPrimary:   { padding:"10px", background:"#238636", border:"1px solid #2ea043", borderRadius:6, color:"#fff", fontSize:14, fontWeight:600, cursor:"pointer" },
   btnSecondary: { padding:"9px", background:"#161b22", border:"1px solid #30363d", borderRadius:6, color:"#e6edf3", fontSize:13, cursor:"pointer" },
+  fine:         { fontSize:11, color:"#6e7681", textAlign:"center", lineHeight:1.5, marginTop:-2 },
+  err:          { fontSize:12, color:"#f85149", textAlign:"center" },
   btnGhost:     { padding:"6px", background:"none", border:"none", color:"#8b949e", fontSize:12, cursor:"pointer" },
 };
