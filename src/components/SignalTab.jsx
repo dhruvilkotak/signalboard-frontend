@@ -1,14 +1,17 @@
 // src/components/SignalTab.jsx
-// Auto-loads signal on mount (300ms debounce).
-// Shared cache: signals_ondemand/{symbol} — one Claude call per ticker per 24h across ALL users.
-// No buttons. Tab click = intent. Cache hit = instant. Cache miss = auto-generate.
+// Loads only while the AI Signal tab is open (`active`), never in the background.
+// Shared cache: signals_ondemand/{symbol} — one Claude call per ticker per day across ALL users;
+// every on-demand signal resets at 11:59 PM ET.
+// Quota: asks the backend first (peek). Unlimited users and free re-views load straight
+// away; a signal that would use 1 of the user's quota needs a click; none left shows
+// the upgrade / reset message instead of calling the API.
 
 import { useState, useEffect, useRef } from "react";
 import {
   AreaChart, Area, LineChart, Line,
   XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer,
 } from "recharts";
-import { getOnDemandSignal, forceRegenerateSignal } from "../lib/api";
+import { getOnDemandSignal, forceRegenerateSignal, peekOnDemandSignal, PAYWALL_EVENT } from "../lib/api";
 import InsiderActivity from "./signal/InsiderActivity";
 import SentimentBar from "./signal/SentimentBar";
 import KeyFactors from "./signal/KeyFactors";
@@ -145,41 +148,154 @@ function Skeleton({ symbol }) {
   );
 }
 
+// ── Quota gate cards ──────────────────────────────────────────────────────────
+function resetLabel(quota) {
+  if (!quota?.resets_at) return null;
+  const d = new Date(quota.resets_at);
+  const days = Math.max(1, Math.ceil((d.getTime() - Date.now()) / 86400000));
+  return `${d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} (${days} day${days === 1 ? "" : "s"})`;
+}
+
+function GateCard({ children }) {
+  return (
+    <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+                  padding: 20, background: "#0d1117" }}>
+      <div style={{ maxWidth: 420, width: "100%", background: "#161b22", border: "1px solid #30363d",
+                    borderRadius: 12, padding: "22px 24px", fontFamily: MONO, textAlign: "center" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+const BTN = {
+  fontFamily: MONO, fontSize: 12, fontWeight: 700, padding: "10px 18px", borderRadius: 8,
+  border: "1px solid #1a6336", background: "#0d2a1a", color: "#3fb950", cursor: "pointer",
+};
+
+function ConfirmSpend({ symbol, quota, onGo, onCancel }) {
+  const [busy, setBusy] = useState(false);
+  const weekly = quota?.period === "week";
+  const left   = quota?.left;
+  const limit  = quota?.limit ?? 5;
+  return (
+    <GateCard>
+      <div style={{ fontSize: 22, marginBottom: 6 }}>🤖</div>
+      <div style={{ fontSize: 14, color: "#e6edf3", fontWeight: 700, marginBottom: 12 }}>
+        Generate AI signal for {symbol}?
+      </div>
+
+      {left != null && (
+        <div style={{ display: "inline-block", marginBottom: 12, padding: "6px 12px", borderRadius: 8,
+                      background: "#1a1206", border: "1px solid #6b4f06", fontSize: 12, color: "#e3b341" }}>
+          ⚡ {left} of {limit} {weekly ? "signals left this week" : "free signals left"}
+        </div>
+      )}
+
+      <div style={{ fontSize: 11, color: "#8b949e", lineHeight: 1.6, marginBottom: 6 }}>
+        {left == null
+          ? "This uses 1 of your on-demand signals."
+          : <>This uses <b style={{ color: "#e3b341" }}>1</b>. You'll have{" "}
+              <b style={{ color: "#e6edf3" }}>{left - 1} of {limit}</b> left
+              {weekly && resetLabel(quota) ? <> until {resetLabel(quota)}</> : null}.</>}
+      </div>
+      {left === 1 && (
+        <div style={{ fontSize: 10, color: "#f0883e", marginBottom: 6 }}>
+          This is your last {weekly ? "signal this week" : "free signal"}.
+        </div>
+      )}
+      <div style={{ fontSize: 10, color: "#6e7681", marginBottom: 16 }}>
+        Opening {symbol} again today is free. Signals reset at 11:59 PM ET.
+      </div>
+
+      <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+        <button style={{ ...BTN, border: "1px solid #30363d", background: "transparent", color: "#8b949e" }}
+                disabled={busy} onClick={onCancel}>
+          Cancel
+        </button>
+        <button style={{ ...BTN, opacity: busy ? 0.6 : 1 }} disabled={busy}
+                onClick={() => { setBusy(true); onGo(); }}>
+          {busy ? "Generating…" : "Generate · uses 1"}
+        </button>
+      </div>
+    </GateCard>
+  );
+}
+
+function NoneLeft({ symbol, gate }) {
+  const weekly = gate.code === "WEEKLY_LIMIT" || gate.quota?.period === "week";
+  const showOptions = () => window.dispatchEvent(new CustomEvent(PAYWALL_EVENT, {
+    detail: { code: gate.code || "PAYWALL", feature: "ondemand", ondemand: gate.quota },
+  }));
+  return (
+    <GateCard>
+      <div style={{ fontSize: 22, marginBottom: 6 }}>⚡</div>
+      <div style={{ fontSize: 14, color: "#e6edf3", fontWeight: 700, marginBottom: 10 }}>
+        {weekly ? "No signals left this week" : "No free signals left"}
+      </div>
+      <div style={{ fontSize: 11, color: "#8b949e", lineHeight: 1.6, marginBottom: 16 }}>
+        {weekly
+          ? <>You've used all {gate.quota?.limit ?? 5} on-demand signals this week.
+              {resetLabel(gate.quota) && <> They reset {resetLabel(gate.quota)}.</>}</>
+          : <>You've used all {gate.quota?.limit ?? 5} free AI signals, so a new one for {symbol} can't be generated.
+              Signals you already opened stay free until they expire.</>}
+      </div>
+      {!weekly && <button style={BTN} onClick={showOptions}>See options</button>}
+    </GateCard>
+  );
+}
+
 // ── Main SignalTab ────────────────────────────────────────────────────────────
-export default function SignalTab({ symbol, currentPrice, isAdmin = false }) {
+export default function SignalTab({ symbol, currentPrice, isAdmin = false, active = true, onCancel }) {
   const [signal,   setSignal]   = useState(null);
-  const [loading,  setLoading]  = useState(true);
+  const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState(null);
   const [forcing,  setForcing]  = useState(false);   // admin force regenerate in flight
   const [forceMsg, setForceMsg] = useState(null);    // success/error after force
-  const debounceRef = useRef(null);
+  const [gate,     setGate]     = useState(null);    // null | "checking" | {status, quota, code}
+  const startedRef = useRef(false);                  // one check per mounted symbol
 
-  // Auto-load on mount and when symbol changes — 300ms debounce
-  useEffect(() => {
-    setSignal(null);
-    setError(null);
-    setForceMsg(null);
-    setLoading(true);
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const data = await getOnDemandSignal(symbol);
-        setSignal(data);
-      } catch (e) {
+  async function load() {
+    setGate(null); setError(null); setLoading(true);
+    try {
+      setSignal(await getOnDemandSignal(symbol));
+    } catch (e) {
+      if (e.code === "PAYWALL" || e.code === "WEEKLY_LIMIT") {
+        setGate({ status: "blocked", code: e.code, quota: e.detail?.ondemand || null });
+      } else {
         setError(e.message);
-      } finally {
-        setLoading(false);
       }
-    }, 300);
+    } finally {
+      setLoading(false);
+    }
+  }
 
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+  // Only when the tab is actually open. LiveDashboard keeps this mounted (hidden)
+  // and re-keys it on every ticker click, so loading on mount spent quota silently.
+  useEffect(() => {
+    if (!active || startedRef.current) return;
+    startedRef.current = true;
+    let cancelled = false, done = false;
+    setGate("checking");
+    peekOnDemandSignal(symbol)
+      .then(p => {
+        done = true;
+        if (cancelled) return;
+        if (p?.status === "unlimited" || p?.status === "free") load();
+        else setGate(p);                                   // uses_one | blocked
+      })
+      .catch(() => {                                       // can't tell — ask, to be safe
+        done = true;
+        if (!cancelled) setGate({ status: "uses_one", quota: null });
+      });
+    return () => {                                         // tab closed mid-check: re-check next time
+      cancelled = true;
+      if (!done) { startedRef.current = false; setGate(null); }
     };
-  }, [symbol]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, symbol]);
 
-  // Admin — force regenerate bypassing 24h cache
+  // Admin — force regenerate bypassing the daily cache
   async function handleForceRegenerate() {
     setForcing(true); setForceMsg(null);
     try {
@@ -197,6 +313,14 @@ export default function SignalTab({ symbol, currentPrice, isAdmin = false }) {
 
   const colors = signal ? (SIG_COLOR[signal.signal] || SIG_COLOR.HOLD) : null;
   const cache  = signal ? cacheStatus(signal) : null;
+
+  // ── Not opened yet ─────────────────────────────────────────────────────────
+  if (!active && !signal && !loading && !gate) return null;
+
+  // ── Quota gate ─────────────────────────────────────────────────────────────
+  if (gate === "checking") return <Skeleton symbol={symbol} />;
+  if (gate?.status === "uses_one") return <ConfirmSpend symbol={symbol} quota={gate.quota} onGo={load} onCancel={onCancel} />;
+  if (gate?.status === "blocked")  return <NoneLeft symbol={symbol} gate={gate} />;
 
   // ── Loading state ──────────────────────────────────────────────────────────
   if (loading) return <Skeleton symbol={symbol} />;
@@ -231,7 +355,7 @@ export default function SignalTab({ symbol, currentPrice, isAdmin = false }) {
         }}>
           <span style={{ fontFamily: MONO, fontSize: 9, color: "#58a6ff", fontWeight: 700 }}>⚙ ADMIN</span>
           <span style={{ fontFamily: MONO, fontSize: 9, color: "#6e7681", flex: 1 }}>
-            Force regenerate bypasses 24h cache — generates fresh signal now
+            Force regenerate bypasses today's cache — generates fresh signal now
           </span>
           {forceMsg && (
             <span style={{ fontFamily: MONO, fontSize: 9,

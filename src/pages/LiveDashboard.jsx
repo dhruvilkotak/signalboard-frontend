@@ -416,6 +416,8 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
                 symbol={selected}
                 currentPrice={price?.price}
                 isAdmin={isAdmin}
+                active={innerTab === "signal"}
+                onCancel={() => setInnerTab("chart")}
               />
             </div>
             {/* ── Portfolio tab ── */}
