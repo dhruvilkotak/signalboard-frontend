@@ -124,6 +124,11 @@ export const getOnDemandSignal = (symbol) =>
     return res;
   });
 
+// Read-only: what would opening this symbol cost? Never counts anything.
+// -> { symbol, status: "unlimited" | "free" | "uses_one" | "blocked", quota, code }
+export const peekOnDemandSignal = (symbol) =>
+  get(`/api/ondemand/peek/${encodeURIComponent(symbol)}`);
+
 // ── Billing (Stripe) ──────────────────────────────────────────────────────────
 export const getBillingStatus     = () => get("/api/billing/status");
 export const startCheckoutSession = () => post("/api/billing/checkout-session");
