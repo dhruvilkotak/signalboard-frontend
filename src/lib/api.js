@@ -124,6 +124,12 @@ export const getOnDemandSignal = (symbol) =>
     return res;
   });
 
+// ── Coupons ───────────────────────────────────────────────────────────────────
+export const redeemCoupon     = (code) => post("/api/coupons/redeem", { code });
+export const getCoupons       = ()     => get("/api/admin/coupons");
+export const createCoupon     = (body) => post("/api/admin/coupons", body);
+export const deactivateCoupon = (code) => del(`/api/admin/coupons/${encodeURIComponent(code)}`);
+
 // ── Watchlist (protected — requires auth) ────────────────────────────────────
 export const getWatchlist    = ()       => get("/api/watchlist/");
 export const addToWatchlist  = (symbol) => post(`/api/watchlist/${symbol}`);
