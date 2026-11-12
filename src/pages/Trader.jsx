@@ -589,7 +589,8 @@ function StrategyCard({ sk, cfg, allocation, onAction, selected, onSelect }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function Trader({ onPortfolioUpdate, prices = {} }) {
+// view="strategies" -> Auto-Trader tab, view="manual" -> Manual Trades tab
+export default function Trader({ onPortfolioUpdate, prices = {}, view = "strategies" }) {
   const [overview,      setOverview]      = useState(null);
   const [manualTrades,  setManualTrades]  = useState([]);
   const [stratTrades,   setStratTrades]   = useState([]);
@@ -601,7 +602,7 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
   const [modal,         setModal]         = useState(null);
   const [selectedSk,    setSelectedSk]    = useState(null);
   const [stratTab,      setStratTab]      = useState("positions");
-  const [mainTab,       setMainTab]       = useState("strategies");
+  const mainTab = view;                                    // "strategies" | "manual"
 
   const summary    = overview?.summary    ?? {};
   const strategies = overview?.strategies ?? {};
@@ -679,7 +680,7 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto" }}>
 
-      {!summary.agreement_accepted && <AgreementModal onAccept={handleAgreement} loading={acting} />}
+      {view === "strategies" && !summary.agreement_accepted && <AgreementModal onAccept={handleAgreement} loading={acting} />}
 
       {modal?.type === "allocate" && (
         <AllocateModal
@@ -749,15 +750,6 @@ export default function Trader({ onPortfolioUpdate, prices = {} }) {
         ))}
       </div>
 
-      <div className="sub-tabs" style={{ marginBottom: 20 }}>
-        {[["strategies", "🤖 My Strategies"], ["manual", "📈 My Manual Trades"]].map(([id, label]) => (
-          <button key={id} className={`sub-tab ${mainTab === id ? "active" : ""}`}
-            style={{ fontSize: 13, padding: "10px 20px" }}
-            onClick={() => { setMainTab(id); setSelectedSk(null); }}>
-            {label}
-          </button>
-        ))}
-      </div>
 
       {mainTab === "strategies" && (
         <div>
