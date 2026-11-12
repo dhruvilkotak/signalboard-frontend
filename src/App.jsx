@@ -19,6 +19,7 @@ import QuotaChip     from "./components/QuotaChip";
 import TrialChip     from "./components/TrialChip";
 import CouponChip    from "./components/CouponChip";
 import RedeemCouponModal from "./components/RedeemCouponModal";
+import LiquidationNotice from "./components/LiquidationNotice";
 import { useFeatureFlagsLoader, useFeatureFlagStore } from "./hooks/useFeatureFlags";
 import { useAccessLoader, useAccessStore, useAccess } from "./hooks/useAccess";
 
@@ -195,6 +196,7 @@ export default function App() {
         </nav>
 
         <main style={main}>
+          <LiquidationNotice />
           {tab === "prices"  && <LiveDashboard watchlist={watchlist} onAdd={handleAdd} onRemove={handleRemove} prices={prices} tokenReady={tokenReady} />}
           {tab === "signals" && <Signals watchlist={watchlist} />}
           {tab === "trader"  && <Trader onPortfolioUpdate={setPortfolioValue} tokenReady={tokenReady} />}
