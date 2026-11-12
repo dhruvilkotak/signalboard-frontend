@@ -20,6 +20,8 @@ import TrialChip     from "./components/TrialChip";
 import CouponChip    from "./components/CouponChip";
 import RedeemCouponModal from "./components/RedeemCouponModal";
 import LiquidationNotice from "./components/LiquidationNotice";
+import SubscriptionChip from "./components/SubscriptionChip";
+import BillingReturnNotice from "./components/BillingReturnNotice";
 import { useFeatureFlagsLoader, useFeatureFlagStore } from "./hooks/useFeatureFlags";
 import { useAccessLoader, useAccessStore, useAccess } from "./hooks/useAccess";
 
@@ -174,6 +176,7 @@ export default function App() {
             )}
             <TrialChip />
             <CouponChip />
+            <SubscriptionChip />
             <QuotaChip />
             <span style={wsStatus}>{connected ? "🟢 Live" : "🔴 Offline"}</span>
             {auth.idleWarning && (
@@ -196,6 +199,7 @@ export default function App() {
         </nav>
 
         <main style={main}>
+          <BillingReturnNotice />
           <LiquidationNotice />
           {tab === "prices"  && <LiveDashboard watchlist={watchlist} onAdd={handleAdd} onRemove={handleRemove} prices={prices} tokenReady={tokenReady} />}
           {tab === "signals" && <Signals watchlist={watchlist} />}

@@ -124,6 +124,11 @@ export const getOnDemandSignal = (symbol) =>
     return res;
   });
 
+// ── Billing (Stripe) ──────────────────────────────────────────────────────────
+export const getBillingStatus     = () => get("/api/billing/status");
+export const startCheckoutSession = () => post("/api/billing/checkout-session");
+export const openPortalSession    = () => post("/api/billing/portal-session");
+
 // ── Coupons ───────────────────────────────────────────────────────────────────
 export const redeemCoupon     = (code) => post("/api/coupons/redeem", { code });
 export const getCoupons       = ()     => get("/api/admin/coupons");
