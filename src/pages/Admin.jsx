@@ -14,6 +14,7 @@ import { getAutoTraderStatus, setKillSwitch } from "../lib/api";
 import FeatureFlagsPanel from "../components/admin/FeatureFlagsPanel";
 import LegalAdminPanel from "../components/admin/LegalAdminPanel";
 import RolesPanel from "../components/admin/RolesPanel";
+import CouponsPanel from "../components/admin/CouponsPanel";
 
 const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 
@@ -47,6 +48,7 @@ export default function Admin() {
           { id: "flags",      label: "🚩 Feature Flags" },
           { id: "legal",      label: "📜 Terms" },
           { id: "roles",      label: "👑 Roles" },
+          { id: "coupons",    label: "🎟 Coupons" },
         ].map(t => (
           <button
             key={t.id}
@@ -65,6 +67,7 @@ export default function Admin() {
         {activeTab === "flags"      && <FeatureFlagsPanel />}
         {activeTab === "legal"      && <LegalAdminPanel />}
         {activeTab === "roles"      && <RolesPanel />}
+        {activeTab === "coupons"    && <CouponsPanel />}
       </div>
     </div>
   );

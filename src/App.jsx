@@ -17,6 +17,8 @@ import TermsGate     from "./components/TermsGate";
 import PaywallModal  from "./components/PaywallModal";
 import QuotaChip     from "./components/QuotaChip";
 import TrialChip     from "./components/TrialChip";
+import CouponChip    from "./components/CouponChip";
+import RedeemCouponModal from "./components/RedeemCouponModal";
 import { useFeatureFlagsLoader, useFeatureFlagStore } from "./hooks/useFeatureFlags";
 import { useAccessLoader, useAccessStore, useAccess } from "./hooks/useAccess";
 
@@ -170,6 +172,7 @@ export default function App() {
               </button>
             )}
             <TrialChip />
+            <CouponChip />
             <QuotaChip />
             <span style={wsStatus}>{connected ? "🟢 Live" : "🔴 Offline"}</span>
             {auth.idleWarning && (
@@ -202,6 +205,7 @@ export default function App() {
         </main>
       </div>
       <PaywallModal />
+      <RedeemCouponModal />
       </TermsGate>
     </AuthContext.Provider>
   );
