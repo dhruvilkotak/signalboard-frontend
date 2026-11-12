@@ -43,9 +43,9 @@ function SignedInHooks() {
   return null;
 }
 
-// Tabs that need a feature (7-day trial). Locked tabs open the paywall instead.
-// Auto-Trader stays open: manual trading is free; starting a strategy is gated by the backend.
-const TAB_FEATURE = { signals: "ai_signals", chat: "ai_chat" };
+// Tabs that need a feature (trial / coupon / paid / Pro). Locked tabs open the paywall instead.
+// Manual Trades is its own tab and always free.
+const TAB_FEATURE = { signals: "ai_signals", chat: "ai_chat", trader: "autotrader" };
 
 const DEFAULT_TICKERS = ["SPY","VOO","JEPI","JEPQ","SCHD","SGOV","MSFT","AAPL","NVDA","GOOGL","AMZN","META","HOOD"];
 
@@ -111,7 +111,7 @@ export default function App() {
       return;
     }
     setTab(newTab);
-    if (newTab === "trader") fetchPortfolioSummary(); // instant header refresh on trader tab
+    if (newTab === "trader" || newTab === "manual") fetchPortfolioSummary(); // instant header refresh
   };
 
   useEffect(() => {
@@ -143,8 +143,9 @@ export default function App() {
 
   const TABS = [
     { id: "prices",  label: "Live Prices" },
+    { id: "manual",  label: "Manual Trades" },
     { id: "signals", label: hasFeature("ai_signals") ? "AI Signals" : "🔒 AI Signals" },
-    { id: "trader",  label: "Auto-Trader" },
+    { id: "trader",  label: hasFeature("autotrader") ? "Auto-Trader" : "🔒 Auto-Trader" },
     { id: "chat",    label: hasFeature("ai_chat")    ? "AI Chat"    : "🔒 AI Chat"    },
     { id: "guide",   label: "📖 Guide"    },
     ...(auth.isAdmin ? [{ id: "admin", label: "⚙ Admin" }] : []),
@@ -163,7 +164,7 @@ export default function App() {
           <div style={headerRight}>
             {/* Portfolio mini bar */}
             {portfolioValue && (
-              <button onClick={() => handleTabChange("trader")} style={portfolioBar} title="Click to open Auto-Trader">
+              <button onClick={() => handleTabChange(hasFeature("autotrader") ? "trader" : "manual")} style={portfolioBar} title="Open your portfolio">
                 <span style={{ fontSize: 12 }}>💼</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", fontFamily: "'Space Mono',monospace" }}>
                   ${tv.toFixed(2)}
@@ -203,7 +204,8 @@ export default function App() {
           <LiquidationNotice />
           {tab === "prices"  && <LiveDashboard watchlist={watchlist} onAdd={handleAdd} onRemove={handleRemove} prices={prices} tokenReady={tokenReady} />}
           {tab === "signals" && <Signals watchlist={watchlist} />}
-          {tab === "trader"  && <Trader onPortfolioUpdate={setPortfolioValue} tokenReady={tokenReady} />}
+          {tab === "manual"  && <Trader view="manual" onPortfolioUpdate={setPortfolioValue} tokenReady={tokenReady} prices={prices} />}
+          {tab === "trader"  && <Trader view="strategies" onPortfolioUpdate={setPortfolioValue} tokenReady={tokenReady} prices={prices} />}
           {tab === "chat"    && <Chat watchlist={watchlist} />}
           {tab === "guide"   && <UserGuide />}
           {tab === "admin"   && auth.isAdmin && AdminPage && <AdminPage />}

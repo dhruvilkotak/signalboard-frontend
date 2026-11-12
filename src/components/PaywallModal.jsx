@@ -18,7 +18,7 @@ const ADMIN_EMAIL = "kotakdhruvil@gmail.com";
 
 const FEATURE_TEXT = {
   ondemand:   { icon: "⚡", title: "You've used your 5 free AI signals",
-                body: "Free accounts get 5 on-demand AI signals. Signals you already opened stay free to view until they expire." },
+                body: "Free accounts get 5 on-demand AI signals in total. Signals you already opened stay viewable until they expire." },
   ai_signals: { icon: "📊", title: "Your free trial has ended",
                 body: "The AI Signals page was part of your 7-day trial." },
   ai_chat:    { icon: "💬", title: "Your free trial has ended",
@@ -47,6 +47,25 @@ export default function PaywallModal() {
 
   const text = FEATURE_TEXT[detail.feature] || FEATURE_TEXT.ondemand;
   const close = () => setDetail(null);
+  const resetsAt = detail.ondemand?.resets_at ? new Date(detail.ondemand.resets_at) : null;
+  const resetText = resetsAt
+    ? `Your 5 signals reset on ${resetsAt.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.`
+    : "Your signals reset every Monday.";
+
+  // Subscribers / Pro / coupon users hitting the weekly cap: no upsell, just when it resets.
+  if (detail.code === "WEEKLY_LIMIT") {
+    return (
+      <div style={s.overlay} onClick={close}>
+        <div style={s.modal} onClick={e => e.stopPropagation()}>
+          <button style={s.close} onClick={close}>✕</button>
+          <div style={{ fontSize: 44, textAlign: "center", marginBottom: 8 }}>⚡</div>
+          <h2 style={s.title}>You've used this week's 5 AI signals</h2>
+          <p style={s.p}>{resetText} Signals you already opened stay viewable until they expire.</p>
+          <button style={s.btnPrimary} onClick={close}>OK</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={s.overlay} onClick={close}>
@@ -58,7 +77,7 @@ export default function PaywallModal() {
 
         <div style={s.perks}>
           <div style={s.perksTitle}>Upgrade to unlock</div>
-          {["Unlimited on-demand AI signals", "AI Signals page", "AI Chat", "Auto-Trader"].map(p => (
+          {["AI Signals page", "AI Chat", "Auto-Trader strategies", "5 on-demand AI signals every week"].map(p => (
             <div key={p} style={s.perk}><span style={{ color: "#3fb950" }}>✓</span> {p}</div>
           ))}
         </div>

@@ -11,7 +11,7 @@ const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 const DESCRIPTIONS = {
 pro_role:               "Pro role: all features, no admin powers",
 terms_gate:             "Users must accept the latest Terms version",
-paywall:                "5 lifetime on-demand signals, then paywall",
+paywall:                "On-demand: free/trial 5 total, paid/Pro/coupon 5 per week",
 trial:                  "7-day trial of AI Signals, AI chat, Auto-Trader",
 billing:                "Pricing page, Stripe checkout and portal",
 coupons:                "Coupon code redemption",

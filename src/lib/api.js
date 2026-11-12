@@ -65,7 +65,7 @@ async function toApiError(method, path, res) {
   const err  = new ApiError(method, path, res.status, body);
   if (res.status === 403 && err.code === "TERMS_REQUIRED") {
     window.dispatchEvent(new Event(TERMS_REQUIRED_EVENT));
-  } else if (res.status === 402 && err.code === "PAYWALL") {
+  } else if ((res.status === 402 && err.code === "PAYWALL") || (res.status === 429 && err.code === "WEEKLY_LIMIT")) {
     window.dispatchEvent(new CustomEvent(PAYWALL_EVENT, { detail: err.detail }));
   }
   return err;
