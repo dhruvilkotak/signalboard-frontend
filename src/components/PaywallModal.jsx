@@ -10,6 +10,10 @@
 
 import { useEffect, useState } from "react";
 import { startCheckout, PRICE_LABEL } from "../lib/billing";
+
+// Shown instead of the Subscribe button while the `billing` flag is off.
+// Change the wording here when there is a firm date.
+export const PAID_PLANS_NOTE = "Paid plans are coming soon. For now, ask the admin for a free coupon to keep full access.";
 import { PAYWALL_EVENT } from "../lib/api";
 import { useFlag } from "../hooks/useFeatureFlags";
 import { useAccessStore } from "../hooks/useAccess";
@@ -99,6 +103,9 @@ export default function PaywallModal() {
               </div>
               {error && <div style={s.err}>{error}</div>}
             </>
+          )}
+          {!billingOn && (
+            <div style={{ ...s.fine, color: "#e3b341", marginBottom: 4 }}>⏳ {PAID_PLANS_NOTE}</div>
           )}
           {couponsOn && (
             <button style={s.btnSecondary}
