@@ -9,7 +9,8 @@
 // With neither on, users are told to contact the admin.
 
 import { useEffect, useState } from "react";
-import { startCheckout, PRICE_LABEL } from "../lib/billing";
+import { startCheckout, PRICE_LABEL, describePlan } from "../lib/billing";
+import { getBillingStatus } from "../lib/api";
 
 // Shown instead of the Subscribe button while the `billing` flag is off.
 // Change the wording here when there is a firm date.
@@ -37,6 +38,19 @@ export default function PaywallModal() {
   const [error, setError] = useState(null);
   const billingOn = useFlag("billing");
   const couponsOn = useFlag("coupons");
+  const [billing, setBilling] = useState(null);       // {plans, tax_added} from /api/billing/status
+  const [plan, setPlan] = useState("monthly");
+
+  // Load plan prices the first time the paywall opens with billing on.
+  useEffect(() => {
+    if (!detail || !billingOn || billing) return;
+    getBillingStatus()
+      .then(b => {
+        setBilling(b);
+        if (b?.plans?.length && !b.plans.some(p => p.id === "monthly")) setPlan(b.plans[0].id);
+      })
+      .catch(() => setBilling({ plans: [], tax_added: false }));
+  }, [detail, billingOn, billing]);
 
   useEffect(() => {
     const onPaywall = (e) => {
@@ -87,23 +101,54 @@ export default function PaywallModal() {
         </div>
 
         <div style={s.actions}>
-          {billingOn && (
-            <>
-              <button style={{ ...s.btnPrimary, opacity: busy ? 0.6 : 1 }} disabled={busy}
-                onClick={async () => {
-                  setBusy(true); setError(null);
-                  const err = await startCheckout();          // redirects to Stripe on success
-                  if (err) { setError(err); setBusy(false); }
-                }}>
-                {busy ? "Opening checkout…" : `Subscribe · ${PRICE_LABEL}`}
-              </button>
-              <div style={s.fine}>
-                Secure checkout by Stripe · cards, Apple Pay, Google Pay · cancel anytime from your account;
-                access continues to the end of the paid month, no partial refunds.
-              </div>
-              {error && <div style={s.err}>{error}</div>}
-            </>
-          )}
+          {billingOn && (() => {
+            const plans = billing?.plans || [];
+            const chosen = plans.find(p => p.id === plan) || plans[0];
+            const info = chosen ? describePlan(chosen, plans) : null;
+            const tax = billing?.tax_added ? " + tax" : "";
+            const label = busy ? "Opening checkout…"
+              : info ? `Continue · ${info.price}${tax}` : `Subscribe · ${PRICE_LABEL}`;
+            return (
+              <>
+                {plans.length > 1 && (
+                  <div style={s.plans}>
+                    {plans.map(p => {
+                      const d = describePlan(p, plans);
+                      const on = p.id === (chosen?.id);
+                      return (
+                        <button key={p.id} onClick={() => setPlan(p.id)}
+                          style={{ ...s.plan, ...(on ? s.planOn : null) }}>
+                          <span style={s.planTop}>
+                            <span style={{ ...s.radio, ...(on ? s.radioOn : null) }} />
+                            <b style={{ color: "#e6edf3" }}>{d.title}</b>
+                            {d.badge && <span style={s.badge}>{d.badge}</span>}
+                            <span style={{ marginLeft: "auto", color: "#e6edf3", fontWeight: 600 }}>{d.price}</span>
+                          </span>
+                          <span style={s.planNote}>{d.note}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <button style={{ ...s.btnPrimary, opacity: busy ? 0.6 : 1 }} disabled={busy}
+                  onClick={async () => {
+                    setBusy(true); setError(null);
+                    const err = await startCheckout(chosen?.id || "monthly");   // redirects to Stripe on success
+                    if (err) { setError(err); setBusy(false); }
+                  }}>
+                  {label}
+                </button>
+                <div style={s.fine}>
+                  Secure checkout by Stripe · cards, Apple Pay, Google Pay
+                  {billing?.tax_added ? " · sales tax added at checkout where applicable" : ""}.
+                  {" "}{chosen?.id === "pass"
+                    ? "One-time payment for full access; it doesn't renew."
+                    : "Cancel anytime from your account; access continues to the end of the paid period, no partial refunds."}
+                </div>
+                {error && <div style={s.err}>{error}</div>}
+              </>
+            );
+          })()}
           {!billingOn && (
             <div style={{ ...s.fine, color: "#e3b341", marginBottom: 4 }}>⏳ {PAID_PLANS_NOTE}</div>
           )}
@@ -140,5 +185,13 @@ const s = {
   btnSecondary: { padding:"9px", background:"#161b22", border:"1px solid #30363d", borderRadius:6, color:"#e6edf3", fontSize:13, cursor:"pointer" },
   fine:         { fontSize:11, color:"#6e7681", textAlign:"center", lineHeight:1.5, marginTop:-2 },
   err:          { fontSize:12, color:"#f85149", textAlign:"center" },
+  plans:        { display:"flex", flexDirection:"column", gap:6, marginBottom:4 },
+  plan:         { display:"flex", flexDirection:"column", gap:2, textAlign:"left", padding:"9px 12px", background:"#0d1117", border:"1px solid #30363d", borderRadius:8, cursor:"pointer", fontSize:13, color:"#8b949e" },
+  planOn:       { border:"1px solid #2ea043", background:"#0d2a1a" },
+  planTop:      { display:"flex", alignItems:"center", gap:8 },
+  planNote:     { fontSize:11, color:"#6e7681", paddingLeft:20 },
+  radio:        { width:12, height:12, borderRadius:"50%", border:"2px solid #6e7681", flexShrink:0 },
+  radioOn:      { border:"4px solid #3fb950" },
+  badge:        { fontSize:10, fontWeight:700, color:"#3fb950", background:"#3fb95020", border:"1px solid #3fb95055", borderRadius:4, padding:"1px 6px" },
   btnGhost:     { padding:"6px", background:"none", border:"none", color:"#8b949e", fontSize:12, cursor:"pointer" },
 };

@@ -1,6 +1,7 @@
 // src/components/SubscriptionChip.jsx
 // Header chip for Stripe subscribers (opens the Stripe Customer Portal):
-//   plan "paid"                         -> "★ Subscribed"
+//   plan "paid" (subscription)          -> "★ Subscribed"
+//   plan "paid" (one-time pass)         -> "★ Paid · until Dec 14"
 //   status past_due / unpaid (not paid) -> "⚠ Payment failed · Update card"
 //   everyone else                       -> nothing
 
@@ -30,7 +31,10 @@ export default function SubscriptionChip() {
       background: `${color}15`, border: `1px solid ${color}55`,
       borderRadius: 4, padding: "2px 8px", whiteSpace: "nowrap",
     }} title="Manage subscription, payment method and invoices">
-      {busy ? "Opening…" : failed ? "⚠ Payment failed · Update card" : "★ Subscribed"}
+      {busy ? "Opening…" : failed ? "⚠ Payment failed · Update card"
+        : access.paid_until && !["active", "trialing"].includes(access.subscription_status)
+          ? `★ Paid · until ${new Date(access.paid_until).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+          : "★ Subscribed"}
     </button>
   );
 }
