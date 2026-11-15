@@ -131,7 +131,7 @@ export const peekOnDemandSignal = (symbol) =>
 
 // ── Billing (Stripe) ──────────────────────────────────────────────────────────
 export const getBillingStatus     = () => get("/api/billing/status");
-export const startCheckoutSession = () => post("/api/billing/checkout-session");
+export const startCheckoutSession = (plan = "monthly") => post("/api/billing/checkout-session", { plan });
 export const openPortalSession    = () => post("/api/billing/portal-session");
 
 // ── Coupons ───────────────────────────────────────────────────────────────────
