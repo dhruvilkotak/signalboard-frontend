@@ -6,7 +6,7 @@ import { useState, useRef } from "react";
 
 const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 
-export default function SearchBar({ watchlist = [], onAdd, limit = 25 }) {
+export default function SearchBar({ watchlist = [], onAdd, limit = 25, fullWidth = false }) {
   const [query,   setQuery]   = useState("");
   const [results, setResults] = useState([]);
   const [open,    setOpen]    = useState(false);
@@ -57,7 +57,7 @@ export default function SearchBar({ watchlist = [], onAdd, limit = 25 }) {
   };
 
   return (
-    <div style={wrap}>
+    <div style={fullWidth ? { ...wrap, width: "100%" } : wrap}>
       {/* Input */}
       <div style={inputBox}>
         <span style={icon}>🔍</span>

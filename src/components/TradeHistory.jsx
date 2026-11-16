@@ -3,6 +3,7 @@
 // Features: pagination, CSV export, daily P&L summary, balance statement.
 
 import { useState, useMemo } from "react";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 const MONO = "'Space Mono', monospace";
 const PAGE_SIZE = 20;
@@ -284,6 +285,7 @@ function TradeRow({ t }) {
   const isBuy    = t.action === "BUY";
   const buyPrice = isBuy ? null : parseBuyPrice(t.reason);
   const hasPnl   = t.pnl != null && t.pnl !== 0;
+  const isMobile = useIsMobile();
 
   return (
     <div className="trade-card fade-in" onClick={() => setOpen(o => !o)}
@@ -320,7 +322,9 @@ function TradeRow({ t }) {
       {/* ── Row 2: Key numbers in clear labeled columns ── */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: isBuy
+        gridTemplateColumns: isMobile
+          ? (isBuy ? "1fr 1fr" : "1fr 1fr 1fr")
+          : isBuy
           ? "1fr 1fr 1fr 1fr"
           : "1fr 1fr 1fr 1fr 1fr 1fr",
         gap: 12,

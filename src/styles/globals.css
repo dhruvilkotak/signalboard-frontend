@@ -281,3 +281,27 @@ body {
   text-align: center; padding: 40px; color: var(--text3);
   font-size: 13px; line-height: 1.6;
 }
+/* ── Mobile / small screens (≤ 768px) ─────────────────────────────────────
+   Desktop is unaffected: every rule below only applies on narrow screens. */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+.h-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.h-scroll::-webkit-scrollbar { display: none; }
+
+@media (max-width: 768px) {
+  /* iOS Safari zooms into inputs smaller than 16px — keep them at 16px */
+  input, select, textarea { font-size: 16px !important; }
+
+  .modal { padding: 20px 16px; width: 94%; }
+  .modal-title { font-size: 16px; }
+  .toast { white-space: normal; max-width: 92vw; text-align: center; }
+  .empty-state { padding: 24px 12px; }
+  .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .summary-card { padding: 8px 10px; }
+  .summary-card .stat-value { font-size: 15px; }
+  .strategy-grid { grid-template-columns: 1fr; }
+  .sub-tabs { overflow-x: auto; scrollbar-width: none; }
+  .sub-tab { white-space: nowrap; }
+  .paper-banner { font-size: 10px; padding: 6px 10px; }
+  .trade-meta { gap: 8px; }
+  .position-card, .trade-card { padding: 12px; }
+}

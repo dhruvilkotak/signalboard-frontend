@@ -1,12 +1,14 @@
+import { useIsMobile } from "../../hooks/useIsMobile";
 const MONO = "'IBM Plex Mono', monospace";
 
 export default function BullBearCase({ bullCase, bearCase, compact = false }) {
+  const isMobile = useIsMobile();
   if (!bullCase && !bearCase) return null;
 
   return (
     <div style={{
       display: "grid",
-      gridTemplateColumns: "1fr 1fr",
+      gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
       gap: compact ? 8 : 10,
       marginBottom: compact ? 12 : 14,
     }}>
