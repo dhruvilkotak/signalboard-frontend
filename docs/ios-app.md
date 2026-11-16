@@ -3,7 +3,7 @@
 The iPhone app is the same React code as the website, wrapped in a native shell
 (Capacitor 8). Web, phone browser and iPhone app all come from this repo.
 
-- Bundle ID: `com.dhruvilkotak.signalboard` (iPhone only)
+- Bundle ID: `com.dhruvil.signalboard` (iPhone only)
 - Native project: `ios/App/App.xcodeproj` (Swift Package Manager, no CocoaPods)
 - Sign-in: native Google sheet → Google ID token → Firebase JS SDK (`src/lib/googleSignIn.js`)
 - New accounts: "Request Access" in the app opens the website; sign-up stays on web
@@ -30,21 +30,20 @@ iPhone Safari → `signalboard-frontend.vercel.app` → Share → **Add to Home 
 3. `xcode-select -p` should print `/Applications/Xcode.app/Contents/Developer`
    (if not: `sudo xcode-select -s /Applications/Xcode.app`).
 
-## 3. Firebase: register the iOS app (you, free)
+## 3. Firebase: get the iOS config file (you, free)
 
-1. Firebase console → project **signalboard-bc35e** → ⚙ Project settings →
-   **Add app** → iOS.
-2. Apple bundle ID: `com.dhruvilkotak.signalboard`, nickname `SignalBoard iOS`.
-   Skip the SDK/code steps in the wizard (already done).
-3. Download **GoogleService-Info.plist** and save it as
-   `ios/App/App/GoogleService-Info.plist` (it's already wired into the Xcode
-   project and is git-ignored).
-4. Run once:
+The iOS app `com.dhruvil.signalboard` is already registered in the Firebase
+project (from the earlier Expo attempt), so just download its config:
+
+1. Firebase console → Project Overview → apps list → ⚙ next to
+   `com.dhruvil.signalboard` → **Download GoogleService-Info.plist**.
+2. Save it as `ios/App/App/GoogleService-Info.plist` (already wired into the
+   Xcode project; git-ignored).
+3. Run once:
    ```bash
    sh scripts/ios-google-setup.sh   # copies REVERSED_CLIENT_ID into Info.plist
    ```
-   Google sign-in is already enabled under Authentication → Sign-in method;
-   registering the iOS app creates the iOS OAuth client automatically.
+   Google sign-in is already enabled under Authentication → Sign-in method.
 
 ## 4. Backend: allow the app's origin (you, backend repo)
 
@@ -83,7 +82,7 @@ Needed for TestFlight and the App Store.
 
 1. https://appstoreconnect.apple.com → Apps → **+ New App**: iOS, name
    `SignalBoard` (must be unique on the store — add a word if taken),
-   bundle ID `com.dhruvilkotak.signalboard`, SKU `signalboard-ios`.
+   bundle ID `com.dhruvil.signalboard`, SKU `signalboard-ios`.
 2. Xcode: device = **Any iOS Device (arm64)** → Product → **Archive** →
    Distribute App → **App Store Connect** → Upload.
    Before each new upload, bump **Build** (App target → General).
