@@ -15,6 +15,7 @@ import FeatureFlagsPanel from "../components/admin/FeatureFlagsPanel";
 import LegalAdminPanel from "../components/admin/LegalAdminPanel";
 import RolesPanel from "../components/admin/RolesPanel";
 import CouponsPanel from "../components/admin/CouponsPanel";
+import AnnouncePanel from "../components/admin/AnnouncePanel";
 
 const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 
@@ -49,6 +50,7 @@ export default function Admin() {
           { id: "legal",      label: "📜 Terms" },
           { id: "roles",      label: "👑 Roles" },
           { id: "coupons",    label: "🎟 Coupons" },
+          { id: "announce",   label: "📣 Announce" },
         ].map(t => (
           <button
             key={t.id}
@@ -68,6 +70,7 @@ export default function Admin() {
         {activeTab === "legal"      && <LegalAdminPanel />}
         {activeTab === "roles"      && <RolesPanel />}
         {activeTab === "coupons"    && <CouponsPanel />}
+        {activeTab === "announce"   && <AnnouncePanel />}
       </div>
     </div>
   );

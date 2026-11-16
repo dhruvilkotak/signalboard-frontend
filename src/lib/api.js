@@ -138,6 +138,10 @@ export const openPortalSession    = () => post("/api/billing/portal-session");
 export const redeemCoupon     = (code) => post("/api/coupons/redeem", { code });
 export const getCoupons       = ()     => get("/api/admin/coupons");
 export const createCoupon     = (body) => post("/api/admin/coupons", body);
+// ── Announcements (admin) ─────────────────────────────────────────────────────
+export const getAnnounceRecipients = ()     => get("/api/admin/announce/recipients");
+export const previewAnnouncement   = (body) => post("/api/admin/announce/preview", body);
+export const sendAnnouncement      = (body) => post("/api/admin/announce", body);
 export const deactivateCoupon = (code) => del(`/api/admin/coupons/${encodeURIComponent(code)}`);
 
 // ── Watchlist (protected — requires auth) ────────────────────────────────────
