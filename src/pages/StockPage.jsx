@@ -10,7 +10,8 @@ import { useQuotes } from "../hooks/useQuotes";
 import { useSignalMap } from "../hooks/useSignalMap";
 import { useAccess } from "../hooks/useAccess";
 import { useMediaQuery } from "../hooks/useIsMobile";
-import { money, pct, SignalTag } from "./Home";
+import { money, pct } from "../lib/format";
+import SignalTag from "../components/ui/SignalTag";
 
 // TradingView interval per range button
 const RANGES = [["1D", "5"], ["1W", "60"], ["1M", "D"], ["1Y", "W"], ["5Y", "M"]];
@@ -100,7 +101,7 @@ export default function StockPage({ symbol, watchlist, onAdd, onRemove, isAdmin,
             <div className="sb-panel" style={{ padding: "16px 18px", marginTop: 10 }}>
               {sig ? <>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <SignalTag sig={sig} />
+                  <SignalTag signal={sig} />
                   <span className="sb-muted" style={{ fontSize: 12, fontWeight: 600 }}>
                     {(sig.confidence || "").toUpperCase()} CONFIDENCE{sig.conviction_score != null ? ` · CONVICTION ${sig.conviction_score}/10` : ""}
                   </span>
