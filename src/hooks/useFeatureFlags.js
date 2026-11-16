@@ -25,6 +25,9 @@ async function fetchConfig() {
   return res.json();
 }
 
+let flagRetry = null;
+let flagFailures = 0;
+
 export const useFeatureFlagStore = create((set, get) => ({
   flags: {},
   loaded: false,
@@ -33,8 +36,15 @@ export const useFeatureFlagStore = create((set, get) => ({
   fetchFlags: async () => {
     if (get().inflight) return get().inflight;
     const p = fetchConfig()
-      .then(res => set({ flags: res?.flags || {}, loaded: true }))
-      .catch(() => set({ loaded: true }))   // keep last flags; default is off
+      .then(res => { flagFailures = 0; set({ flags: res?.flags || {}, loaded: true }); })
+      .catch(() => {                        // keep last flags; default is off; retry soon
+        set({ loaded: true });
+        flagFailures += 1;
+        if (!flagRetry) {
+          flagRetry = setTimeout(() => { flagRetry = null; get().fetchFlags(); },
+                                 [2000, 5000, 10000, 30000][Math.min(flagFailures - 1, 3)]);
+        }
+      })
       .finally(() => set({ inflight: null }));
     set({ inflight: p });
     return p;

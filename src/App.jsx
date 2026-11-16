@@ -23,7 +23,7 @@ import LiquidationNotice from "./components/LiquidationNotice";
 import SubscriptionChip from "./components/SubscriptionChip";
 import BillingReturnNotice from "./components/BillingReturnNotice";
 import { useFeatureFlagsLoader, useFeatureFlagStore } from "./hooks/useFeatureFlags";
-import { useAccessLoader, useAccessStore, useAccess } from "./hooks/useAccess";
+import { useAccessLoader, useAccessStore, useAccess, checkFeature } from "./hooks/useAccess";
 
 // Wire Firebase auth into api.js immediately — eliminates token race condition
 setFirebaseAuth(firebaseAuth);
@@ -51,7 +51,8 @@ const DEFAULT_TICKERS = ["SPY","VOO","JEPI","JEPQ","SCHD","SGOV","MSFT","AAPL","
 
 export default function App() {
   const auth = useAuth();
-  const { hasFeature } = useAccess();
+  const { access, hasFeature, isLocked, error: accessError } = useAccess();
+  const [accessNotice, setAccessNotice] = useState(null);
   const [tab,            setTab]            = useState("prices");
   const [watchlist,      setWatchlist]      = useState([]);
   const [watchlistReady, setWatchlistReady] = useState(false);
@@ -104,15 +105,35 @@ export default function App() {
     return () => clearInterval(iv);
   }, [auth.token, auth.isPending, fetchPortfolioSummary]);
 
-  const handleTabChange = (newTab) => {
+  const handleTabChange = async (newTab) => {
     const feature = TAB_FEATURE[newTab];
-    if (feature && !hasFeature(feature)) {
-      window.dispatchEvent(new CustomEvent(PAYWALL_EVENT, { detail: { feature } }));
-      return;
+    if (feature) {
+      const ok = await checkFeature(feature);       // loads access first if needed
+      if (ok === null) {                            // couldn't reach the server: stay put
+        setAccessNotice("Couldn't check your plan just now. Retrying — try again in a few seconds.");
+        return;
+      }
+      if (!ok) {
+        window.dispatchEvent(new CustomEvent(PAYWALL_EVENT, { detail: { feature } }));
+        return;
+      }
     }
+    setAccessNotice(null);
     setTab(newTab);
     if (newTab === "trader" || newTab === "manual") fetchPortfolioSummary(); // instant header refresh
   };
+
+  // Access can change while the app is open (trial ends, coupon expires, etc.):
+  // if the open tab is no longer allowed, go back to Live Prices and show why.
+  useEffect(() => {
+    const feature = TAB_FEATURE[tab];
+    if (feature && access && access.features?.[feature] !== true) {
+      setTab("prices");
+      window.dispatchEvent(new CustomEvent(PAYWALL_EVENT, { detail: { feature } }));
+    }
+  }, [access, tab]);
+
+  useEffect(() => { if (access) setAccessNotice(null); }, [access]);
 
   useEffect(() => {
     if (auth.isAdmin && !AdminPage) {
@@ -144,9 +165,9 @@ export default function App() {
   const TABS = [
     { id: "prices",  label: "Live Prices" },
     { id: "manual",  label: "Manual Trades" },
-    { id: "signals", label: hasFeature("ai_signals") ? "AI Signals" : "🔒 AI Signals" },
-    { id: "trader",  label: hasFeature("autotrader") ? "Auto-Trader" : "🔒 Auto-Trader" },
-    { id: "chat",    label: hasFeature("ai_chat")    ? "AI Chat"    : "🔒 AI Chat"    },
+    { id: "signals", label: isLocked("ai_signals") ? "🔒 AI Signals" : "AI Signals" },
+    { id: "trader",  label: isLocked("autotrader") ? "🔒 Auto-Trader" : "Auto-Trader" },
+    { id: "chat",    label: isLocked("ai_chat")    ? "🔒 AI Chat"    : "AI Chat"    },
     { id: "guide",   label: "📖 Guide"    },
     ...(auth.isAdmin ? [{ id: "admin", label: "⚙ Admin" }] : []),
   ];
@@ -200,6 +221,12 @@ export default function App() {
         </nav>
 
         <main style={main}>
+          {accessNotice && (
+            <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 6, fontSize: 12,
+                          background: "#f0a00015", border: "1px solid #f0a00055", color: "#f0a000" }}>
+              {accessNotice}
+            </div>
+          )}
           <BillingReturnNotice />
           <LiquidationNotice />
           {tab === "prices"  && <LiveDashboard watchlist={watchlist} onAdd={handleAdd} onRemove={handleRemove} prices={prices} tokenReady={tokenReady} />}

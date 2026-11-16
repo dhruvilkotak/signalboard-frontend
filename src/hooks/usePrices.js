@@ -10,18 +10,30 @@ export function usePrices() {
   // ── CHANGE 5: track whether market is closed so we pause the WS ───────────
   const [marketClosed, setMarketClosed] = useState(false)
   const wsRef = useRef(null)
+  const connectedRef = useRef(false)
+  const gotPricesRef = useRef(false)
+  const retryRef = useRef(null)
 
-  const fetchPrices = useCallback(async () => {
+  const fetchPrices = useCallback(async (attemptArg = 0) => {
+    const attempt = Number.isInteger(attemptArg) ? attemptArg : 0   // refetch may be used as an onClick
     try {
       const data = await getPrices()
       setPrices(data)
       setError(null)
+      gotPricesRef.current = true
     } catch (e) {
       setError(e.message)
+      // First load failed: retry quickly (2s, 4s, 8s) instead of waiting for the 30s poll.
+      if (!gotPricesRef.current && attempt < 3 && !retryRef.current) {
+        retryRef.current = setTimeout(() => { retryRef.current = null; fetchPrices(attempt + 1) },
+                                      2000 * 2 ** attempt)
+      }
     } finally {
       setLoading(false)
     }
   }, [])
+
+  useEffect(() => () => { if (retryRef.current) clearTimeout(retryRef.current) }, [])
 
   // Check market status every 60s — pause WS when closed
   useEffect(() => {
@@ -57,17 +69,19 @@ export function usePrices() {
       if (msg.type === "prices") {
         setPrices(msg.data)
         setConnected(true)
+        connectedRef.current = true
+        gotPricesRef.current = true
         setLoading(false)
       }
     })
     wsRef.current = ws
-    ws.onopen  = () => setConnected(true)
-    ws.onclose = () => setConnected(false)
-    ws.onerror = () => setConnected(false)
+    ws.onopen  = () => { setConnected(true);  connectedRef.current = true }
+    ws.onclose = () => { setConnected(false); connectedRef.current = false }
+    ws.onerror = () => { setConnected(false); connectedRef.current = false }
 
-    // Polling fallback every 30s if WS disconnects
+    // Polling fallback every 30s if WS disconnects (ref: the state value here would be stale)
     const poll = setInterval(() => {
-      if (!connected) fetchPrices()
+      if (!connectedRef.current) fetchPrices()
     }, 30_000)
 
     return () => {
