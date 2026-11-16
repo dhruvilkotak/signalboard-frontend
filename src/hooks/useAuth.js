@@ -5,11 +5,11 @@ import { useState, useEffect, useRef } from "react";
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
-  signInWithPopup,
   signOut,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { auth, provider, db } from "../lib/firebase";
+import { auth, db } from "../lib/firebase";
+import { signInWithGoogle, signOutEverywhere } from "../lib/googleSignIn";
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const WARN_BEFORE_MS  =  5 * 60 * 1000;
@@ -32,7 +32,7 @@ export function useAuth() {
     clearTimeout(warnTimer.current);
     setIdleWarning(false);
     warnTimer.current = setTimeout(() => setIdleWarning(true), IDLE_TIMEOUT_MS - WARN_BEFORE_MS);
-    idleTimer.current = setTimeout(() => signOut(auth), IDLE_TIMEOUT_MS);
+    idleTimer.current = setTimeout(() => signOutEverywhere(), IDLE_TIMEOUT_MS);
   };
 
   useEffect(() => {
@@ -148,7 +148,7 @@ export function useAuth() {
     setError(null);
     setLoading(true);
     try {
-      await signInWithPopup(auth, provider);
+      await signInWithGoogle();
     } catch (e) {
       setError(friendlyError(e.code));
     } finally {
@@ -156,7 +156,7 @@ export function useAuth() {
     }
   };
 
-  const logout = () => signOut(auth);
+  const logout = () => signOutEverywhere();
 
   return {
     user, token, isAdmin, isPending,

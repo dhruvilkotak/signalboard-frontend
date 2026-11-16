@@ -6,6 +6,7 @@
 import { useState, useEffect } from "react";
 import Signup from "./Signup";
 import GoogleButton from "../components/GoogleButton";
+import { isNativeApp, WEB_URL } from "../lib/platform";
 
 const MONO = "'IBM Plex Mono', monospace";
 
@@ -255,7 +256,9 @@ export default function Login({ onGoogle, error, loading }) {
 
         <div style={s.footer}>
           <span style={{ color:"#8b949e" }}>Don't have an account? </span>
-          <button style={s.linkBtn} onClick={() => setShowSignup(true)}>
+          {/* In the iPhone app, new accounts are requested on the website (keeps account
+              creation + reCAPTCHA on the web, where they already work). */}
+          <button style={s.linkBtn} onClick={() => isNativeApp ? window.open(WEB_URL, "_blank") : setShowSignup(true)}>
             Request Access
           </button>
         </div>
