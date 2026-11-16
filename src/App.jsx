@@ -1,11 +1,18 @@
-// src/App.jsx — v3 (portfolio bar uses getPortfolioOverview for accurate total_value)
+// src/App.jsx — v4: new app shell (top bar on desktop, bottom tabs on phones) with hash routes
 
 import { useState, useEffect, useCallback, createContext, useContext } from "react";
 import { useAuth } from "./hooks/useAuth";
 import { auth as firebaseAuth } from "./lib/firebase";
 import { PAYWALL_EVENT, setTokenGetter, setFirebaseAuth, getWatchlist, addToWatchlist, removeFromWatchlist, getPortfolioOverview } from "./lib/api";
 import { usePrices } from "./hooks/usePrices";
-import { useIsMobile, useIsCompact } from "./hooks/useIsMobile";
+import { useMediaQuery } from "./hooks/useIsMobile";
+import { useRoute, go } from "./lib/router";
+import { TopBar, BottomNav, Logo, navFor } from "./components/shell/Nav";
+import SearchBar from "./components/SearchBar";
+import Home from "./pages/Home";
+import StockPage from "./pages/StockPage";
+import Account from "./pages/Account";
+import "./styles/sb.css";
 
 import Login         from "./pages/Login";
 import LiveDashboard from "./pages/LiveDashboard";
@@ -44,9 +51,9 @@ function SignedInHooks() {
   return null;
 }
 
-// Tabs that need a feature (trial / coupon / paid / Pro). Locked tabs open the paywall instead.
-// Manual Trades is its own tab and always free.
-const TAB_FEATURE = { signals: "ai_signals", chat: "ai_chat", trader: "autotrader" };
+// Routes that need a feature (trial / coupon / paid / Pro). Locked ones open the paywall instead.
+// Home, stock pages and manual trades are always free.
+const ROUTE_FEATURE = { signals: "ai_signals", chat: "ai_chat", auto: "autotrader" };
 
 const DEFAULT_TICKERS = ["SPY","VOO","JEPI","JEPQ","SCHD","SGOV","MSFT","AAPL","NVDA","GOOGL","AMZN","META","HOOD"];
 
@@ -54,16 +61,14 @@ export default function App() {
   const auth = useAuth();
   const { access, hasFeature, isLocked, error: accessError } = useAccess();
   const [accessNotice, setAccessNotice] = useState(null);
-  const [tab,            setTab]            = useState("prices");
+  const route = useRoute();
   const [watchlist,      setWatchlist]      = useState([]);
   const [watchlistReady, setWatchlistReady] = useState(false);
   const [AdminPage,      setAdminPage]      = useState(null);
   const [portfolioValue, setPortfolioValue] = useState(null);
   const [tokenReady,     setTokenReady]     = useState(false);
   const { prices, connected } = usePrices();
-  const isMobile  = useIsMobile();   // phones: tighter tab bar + padding
-  const isCompact = useIsCompact();  // phones + tablets: header collapses into a ☰ menu
-  const [menuOpen, setMenuOpen] = useState(false);
+  const isPhone = useMediaQuery("(max-width: 899px)");   // bottom tab bar layout
 
   // Wire token into api.js — use auth.token (already fetched by useAuth)
   // so it's available synchronously. No race condition with API calls.
@@ -109,34 +114,33 @@ export default function App() {
     return () => clearInterval(iv);
   }, [auth.token, auth.isPending, fetchPortfolioSummary]);
 
-  const handleTabChange = async (newTab) => {
-    const feature = TAB_FEATURE[newTab];
+  const openPaywall = (feature) =>
+    window.dispatchEvent(new CustomEvent(PAYWALL_EVENT, { detail: { feature } }));
+
+  const navTo = async (name) => {
+    const feature = ROUTE_FEATURE[name];
     if (feature) {
       const ok = await checkFeature(feature);       // loads access first if needed
       if (ok === null) {                            // couldn't reach the server: stay put
         setAccessNotice("Couldn't check your plan just now. Retrying — try again in a few seconds.");
         return;
       }
-      if (!ok) {
-        window.dispatchEvent(new CustomEvent(PAYWALL_EVENT, { detail: { feature } }));
-        return;
-      }
+      if (!ok) { openPaywall(feature); return; }
     }
     setAccessNotice(null);
-    setMenuOpen(false);
-    setTab(newTab);
-    if (newTab === "trader" || newTab === "manual") fetchPortfolioSummary(); // instant header refresh
+    go(name);
+    if (name === "auto" || name === "manual") fetchPortfolioSummary();
   };
 
-  // Access can change while the app is open (trial ends, coupon expires, etc.):
-  // if the open tab is no longer allowed, go back to Live Prices and show why.
+  // Access can change while the app is open (trial ends, coupon expires, etc.),
+  // and links can point at locked pages: if the open page isn't allowed, go Home and show why.
   useEffect(() => {
-    const feature = TAB_FEATURE[tab];
+    const feature = ROUTE_FEATURE[route.name];
     if (feature && access && access.features?.[feature] !== true) {
-      setTab("prices");
-      window.dispatchEvent(new CustomEvent(PAYWALL_EVENT, { detail: { feature } }));
+      go("home");
+      openPaywall(feature);
     }
-  }, [access, tab]);
+  }, [access, route.name]);
 
   useEffect(() => { if (access) setAccessNotice(null); }, [access]);
 
@@ -167,130 +171,55 @@ export default function App() {
   if (!auth.user) return <Login onGoogle={auth.loginGoogle} error={auth.error} loading={auth.loading} />;
   if (auth.isPending) return <PendingScreen user={auth.user} />;
 
-  const TABS = [
-    { id: "prices",  label: "Live Prices" },
-    { id: "manual",  label: "Manual Trades" },
-    { id: "signals", label: isLocked("ai_signals") ? "🔒 AI Signals" : "AI Signals" },
-    { id: "trader",  label: isLocked("autotrader") ? "🔒 Auto-Trader" : "Auto-Trader" },
-    { id: "chat",    label: isLocked("ai_chat")    ? "🔒 AI Chat"    : "AI Chat"    },
-    { id: "guide",   label: "📖 Guide"    },
-    ...(auth.isAdmin ? [{ id: "admin", label: "⚙ Admin" }] : []),
-  ];
-
-  const tv     = portfolioValue?.total_value    ?? 0;
-  const avail  = portfolioValue?.available_cash ?? 0;
+  const page = (() => {
+    switch (route.name) {
+      case "stock":    return <StockPage symbol={route.param} watchlist={watchlist} onAdd={handleAdd} onRemove={handleRemove}
+                                         isAdmin={auth.isAdmin} onUnlock={openPaywall} />;
+      case "signals":  return <div className="sb-page sb-legacy"><Signals watchlist={watchlist} /></div>;
+      case "auto":     return <div className="sb-page sb-legacy"><Trader view="strategies" onPortfolioUpdate={setPortfolioValue} tokenReady={tokenReady} prices={prices} /></div>;
+      case "manual":   return <div className="sb-page sb-legacy"><Trader view="manual" onPortfolioUpdate={setPortfolioValue} tokenReady={tokenReady} prices={prices} /></div>;
+      case "chat":     return <div className="sb-page sb-legacy"><Chat watchlist={watchlist} /></div>;
+      case "guide":    return <div className="sb-page sb-legacy"><UserGuide /></div>;
+      case "account":  return <Account auth={auth} connected={connected} />;
+      case "terminal": return <div className="sb-page wide sb-legacy"><LiveDashboard watchlist={watchlist} onAdd={handleAdd} onRemove={handleRemove} prices={prices} tokenReady={tokenReady} /></div>;
+      case "admin":    return <div className="sb-page wide sb-legacy">{auth.isAdmin ? (AdminPage ? <AdminPage /> : null) : <div style={denied}>Access denied.</div>}</div>;
+      default:         return <Home watchlist={watchlist} onUnlock={openPaywall} />;
+    }
+  })();
+  const active = navFor(route.name);
 
   return (
     <AuthContext.Provider value={auth}>
       <SignedInHooks />
       <TermsGate>
-      <div style={appWrap}>
-        {isCompact ? (
-          <header style={{ ...header, padding: "0 0.75rem", position: "relative", zIndex: 50 }}>
-            <span style={{ ...logoText, fontSize: 16 }}>SignalBoard</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {portfolioValue && (
-                <button onClick={() => handleTabChange(hasFeature("autotrader") ? "trader" : "manual")} style={{ ...portfolioBar, padding: "4px 8px" }} title="Open your portfolio">
-                  <span style={{ fontSize: 12 }}>💼</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", fontFamily: "'Space Mono',monospace" }}>
-                    ${tv.toFixed(2)}
-                  </span>
-                </button>
-              )}
-              <span style={wsStatus} title={connected ? "Live" : "Offline"}>{connected ? "🟢" : "🔴"}</span>
-              <button onClick={() => setMenuOpen(o => !o)} style={menuBtn} aria-label="Menu" aria-expanded={menuOpen}>
-                {menuOpen ? "✕" : "☰"}
-              </button>
-            </div>
-            {menuOpen && (
-              <div onClick={() => setMenuOpen(false)} style={menuBackdrop} />
-            )}
-            {menuOpen && (
-              <div style={mobileMenu}>
-                {portfolioValue && (
-                  <div style={{ fontSize: 11, color: "#8b949e", fontFamily: "'Space Mono',monospace" }}>
-                    💼 ${tv.toFixed(2)} · Cash: ${avail.toFixed(0)} · PAPER
-                  </div>
-                )}
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                  <TrialChip />
-                  <CouponChip />
-                  <SubscriptionChip />
-                  <QuotaChip />
-                  {auth.isAdmin && <span style={adminBadge}>Admin</span>}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                  <span style={{ ...userEmail, maxWidth: "60vw" }}>{auth.user.email || auth.user.displayName}</span>
-                  <button style={{ ...logoutBtn, padding: "8px 14px" }} onClick={auth.logout}>Sign out</button>
-                </div>
+      <div className="sb-app">
+        {isPhone ? (
+          route.name !== "stock" && (
+            <header className="sb-phead">
+              <Logo onClick={() => go("home")} />
+              <div style={{ flex: 1, minWidth: 0, maxWidth: 260 }}>
+                <SearchBar watchlist={watchlist} onSelect={sym => go(`stock/${encodeURIComponent(sym)}`)} fullWidth placeholder="Search" />
               </div>
-            )}
-          </header>
+            </header>
+          )
         ) : (
-          <header style={header}>
-            <span style={logoText}>SignalBoard</span>
-            <div style={headerRight}>
-              {/* Portfolio mini bar */}
-              {portfolioValue && (
-                <button onClick={() => handleTabChange(hasFeature("autotrader") ? "trader" : "manual")} style={portfolioBar} title="Open your portfolio">
-                  <span style={{ fontSize: 12 }}>💼</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", fontFamily: "'Space Mono',monospace" }}>
-                    ${tv.toFixed(2)}
-                  </span>
-                  <span style={{ fontSize: 10, color: "#6e7681", fontFamily: "'Space Mono',monospace" }}>
-                    Cash: ${avail.toFixed(0)}
-                  </span>
-                  <span style={{ fontSize: 9, color: "#6e7681", fontFamily: "'Space Mono',monospace" }}>PAPER</span>
-                </button>
-              )}
-              <TrialChip />
-              <CouponChip />
-              <SubscriptionChip />
-              <QuotaChip />
-              <span style={wsStatus}>{connected ? "🟢 Live" : "🔴 Offline"}</span>
-              {auth.idleWarning && (
-                <span style={{ fontSize:11, color:"#f0a000", background:"#f0a00015", border:"1px solid #f0a00040", borderRadius:4, padding:"2px 8px" }}>
-                  ⏱ Signing out in 5 min
-                </span>
-              )}
-              {auth.isAdmin && <span style={adminBadge}>Admin</span>}
-              <span style={userEmail}>{auth.user.email || auth.user.displayName}</span>
-              <button style={logoutBtn} onClick={auth.logout}>Sign out</button>
-            </div>
-          </header>
+          <TopBar active={active} onNav={navTo} isLocked={isLocked} watchlist={watchlist} />
         )}
-        {isCompact && auth.idleWarning && (
-          <div style={{ fontSize:11, color:"#f0a000", background:"#f0a00015", borderBottom:"1px solid #f0a00040", padding:"4px 12px", textAlign:"center" }}>
-            ⏱ Signing out in 5 min
+
+        {(accessNotice || auth.idleWarning) && (
+          <div style={{ maxWidth: 1120, margin: "12px auto 0", padding: "0 20px" }}>
+            {accessNotice && <div style={notice}>{accessNotice}</div>}
+            {auth.idleWarning && <div style={notice}>⏱ Signing out in 5 min — tap anywhere to stay signed in.</div>}
           </div>
         )}
-
-        <nav style={isMobile ? { ...tabBar, padding: 0 } : tabBar} className={isMobile ? "h-scroll" : undefined}>
-          {TABS.map(t => (
-            <button key={t.id} style={{ ...tabBtn, ...(isMobile ? tabBtnMobile : {}), ...(tab === t.id ? tabBtnActive : {}) }} onClick={() => handleTabChange(t.id)}>
-              {t.label}
-            </button>
-          ))}
-        </nav>
-
-        <main style={isMobile ? { ...main, padding: "0.75rem" } : main}>
-          {accessNotice && (
-            <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 6, fontSize: 12,
-                          background: "#f0a00015", border: "1px solid #f0a00055", color: "#f0a000" }}>
-              {accessNotice}
-            </div>
-          )}
+        <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 20px" }}>
           <BillingReturnNotice />
           <LiquidationNotice />
-          {tab === "prices"  && <LiveDashboard watchlist={watchlist} onAdd={handleAdd} onRemove={handleRemove} prices={prices} tokenReady={tokenReady} />}
-          {tab === "signals" && <Signals watchlist={watchlist} />}
-          {tab === "manual"  && <Trader view="manual" onPortfolioUpdate={setPortfolioValue} tokenReady={tokenReady} prices={prices} />}
-          {tab === "trader"  && <Trader view="strategies" onPortfolioUpdate={setPortfolioValue} tokenReady={tokenReady} prices={prices} />}
-          {tab === "chat"    && <Chat watchlist={watchlist} />}
-          {tab === "guide"   && <UserGuide />}
-          {tab === "admin"   && auth.isAdmin && AdminPage && <AdminPage />}
-          {tab === "admin"   && !auth.isAdmin && <div style={denied}>Access denied.</div>}
-        </main>
+        </div>
+
+        {page}
+
+        {isPhone && <BottomNav active={active} onNav={navTo} isLocked={isLocked} />}
       </div>
       <PaywallModal />
       <RedeemCouponModal />
@@ -318,5 +247,6 @@ const menuBackdrop = { position:"fixed", inset:0, top:52, background:"rgba(1,4,9
 const mobileMenu   = { position:"absolute", top:"100%", left:0, right:0, background:"var(--color-surface,#161b22)", borderBottom:"1px solid var(--color-border,#30363d)", padding:"12px 0.75rem", display:"flex", flexDirection:"column", gap:12, boxShadow:"0 8px 24px rgba(0,0,0,0.5)" };
 const tabBtnActive = { color:"#e6edf3", borderBottomColor:"#2ea043" };
 const main         = { flex:1, overflow:"auto", padding:"1.5rem" };
+const notice       = { marginTop: 8, padding: "8px 12px", borderRadius: 8, fontSize: 13, background: "#f0a00015", border: "1px solid #f0a00055", color: "#f0a000" };
 const denied       = { color:"#f85149", padding:"2rem", fontSize:14 };
 const portfolioBar = { display:"flex", alignItems:"center", gap:6, background:"#0d1117", border:"1px solid #30363d", borderRadius:7, padding:"4px 12px", cursor:"pointer", transition:"border-color 0.15s" };

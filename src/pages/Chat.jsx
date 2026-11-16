@@ -189,7 +189,7 @@ export default function Chat({ watchlist = [] }) {
   return (
     <div style={{
       display: "flex", flexDirection: "column",
-      height: isMobile ? "calc(100dvh - 120px)" : "calc(100vh - 100px)",
+      height: isMobile ? "calc(100dvh - 190px)" : "calc(100vh - 140px)",
       maxWidth: 900, margin: "0 auto", width: "100%",
     }}>
       {/* Context selector */}
