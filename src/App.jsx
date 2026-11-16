@@ -1,37 +1,27 @@
-// src/App.jsx — v4: new app shell (top bar on desktop, bottom tabs on phones) with hash routes
-
-import { useState, useEffect, useCallback, createContext, useContext } from "react";
+// src/App.jsx — v5: auth gates + app shell. Pages live in routes/AppRoutes.jsx,
+// shell pieces in components/shell, data in hooks/.
+import { useEffect, createContext, useContext } from "react";
 import { useAuth } from "./hooks/useAuth";
 import { auth as firebaseAuth } from "./lib/firebase";
-import { PAYWALL_EVENT, setTokenGetter, setFirebaseAuth, getWatchlist, addToWatchlist, removeFromWatchlist, getPortfolioOverview } from "./lib/api";
+import { setFirebaseAuth } from "./lib/api";
 import { usePrices } from "./hooks/usePrices";
 import { useMediaQuery } from "./hooks/useIsMobile";
-import { useRoute, go } from "./lib/router";
-import { TopBar, BottomNav, Logo, navFor } from "./components/shell/Nav";
-import SearchBar from "./components/SearchBar";
-import Home from "./pages/Home";
-import StockPage from "./pages/StockPage";
-import Account from "./pages/Account";
-import "./styles/sb.css";
-
-import Login         from "./pages/Login";
-import LiveDashboard from "./pages/LiveDashboard";
-import PendingScreen from "./pages/PendingScreen";
-import Signals       from "./pages/Signals";
-import Trader        from "./pages/Trader";
-import Chat          from "./pages/Chat";
-import UserGuide     from "./pages/UserGuide";
-import TermsGate     from "./components/TermsGate";
-import PaywallModal  from "./components/PaywallModal";
-import QuotaChip     from "./components/QuotaChip";
-import TrialChip     from "./components/TrialChip";
-import CouponChip    from "./components/CouponChip";
-import RedeemCouponModal from "./components/RedeemCouponModal";
-import LiquidationNotice from "./components/LiquidationNotice";
-import SubscriptionChip from "./components/SubscriptionChip";
-import BillingReturnNotice from "./components/BillingReturnNotice";
+import { useApiToken } from "./hooks/useApiToken";
+import { useWatchlist } from "./hooks/useWatchlist";
+import { useGuardedNav } from "./hooks/useGuardedNav";
 import { useFeatureFlagsLoader, useFeatureFlagStore } from "./hooks/useFeatureFlags";
-import { useAccessLoader, useAccessStore, useAccess, checkFeature } from "./hooks/useAccess";
+import { useAccessLoader, useAccessStore, useAccess } from "./hooks/useAccess";
+import { useRoute } from "./lib/router";
+import { TopBar, BottomNav, navFor } from "./components/shell/Nav";
+import PhoneHeader from "./components/shell/PhoneHeader";
+import Notices from "./components/shell/Notices";
+import AppRoutes from "./routes/AppRoutes";
+import Login from "./pages/Login";
+import PendingScreen from "./pages/PendingScreen";
+import TermsGate from "./components/TermsGate";
+import PaywallModal from "./components/PaywallModal";
+import RedeemCouponModal from "./components/RedeemCouponModal";
+import "./styles/sb.css";
 
 // Wire Firebase auth into api.js immediately — eliminates token race condition
 setFirebaseAuth(firebaseAuth);
@@ -39,8 +29,7 @@ setFirebaseAuth(firebaseAuth);
 export const AuthContext = createContext(null);
 export const useAuthContext = () => useContext(AuthContext);
 
-// Loads feature flags + access for the signed-in user. Rendered only after
-// login + approval, so the first fetch always has a user; clears on sign-out.
+// Loads feature flags + access for the signed-in user; clears them on sign-out.
 function SignedInHooks() {
   useFeatureFlagsLoader();
   useAccessLoader();
@@ -51,202 +40,52 @@ function SignedInHooks() {
   return null;
 }
 
-// Routes that need a feature (trial / coupon / paid / Pro). Locked ones open the paywall instead.
-// Home, stock pages and manual trades are always free.
-const ROUTE_FEATURE = { signals: "ai_signals", chat: "ai_chat", auto: "autotrader" };
+function Splash() {
+  return (
+    <div className="sb-app" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+      <span style={{ fontSize: 28, fontWeight: 700 }}>SignalBoard</span>
+      <span className="sb-muted" style={{ fontSize: 14, marginTop: 8 }}>Loading…</span>
+    </div>
+  );
+}
 
-const DEFAULT_TICKERS = ["SPY","VOO","JEPI","JEPQ","SCHD","SGOV","MSFT","AAPL","NVDA","GOOGL","AMZN","META","HOOD"];
+function Shell({ auth }) {
+  const route = useRoute();
+  const { access, isLocked } = useAccess();
+  const { navTo, notice } = useGuardedNav(route, access);
+  const tokenReady = useApiToken(auth);
+  const { watchlist, add, remove } = useWatchlist(!!auth.token);
+  const { prices, connected } = usePrices();
+  const isPhone = useMediaQuery("(max-width: 899px)");
+  const active = navFor(route.name);
+
+  return (
+    <div className="sb-app">
+      {isPhone
+        ? route.name !== "stock" && <PhoneHeader watchlist={watchlist} />
+        : <TopBar active={active} onNav={navTo} isLocked={isLocked} watchlist={watchlist} />}
+      <Notices accessNotice={notice} idleWarning={auth.idleWarning} />
+      <AppRoutes route={route} auth={auth} watchlist={{ list: watchlist, add, remove }}
+        prices={prices} connected={connected} tokenReady={tokenReady} />
+      {isPhone && <BottomNav active={active} onNav={navTo} isLocked={isLocked} />}
+    </div>
+  );
+}
 
 export default function App() {
   const auth = useAuth();
-  const { access, hasFeature, isLocked, error: accessError } = useAccess();
-  const [accessNotice, setAccessNotice] = useState(null);
-  const route = useRoute();
-  const [watchlist,      setWatchlist]      = useState([]);
-  const [watchlistReady, setWatchlistReady] = useState(false);
-  const [AdminPage,      setAdminPage]      = useState(null);
-  const [portfolioValue, setPortfolioValue] = useState(null);
-  const [tokenReady,     setTokenReady]     = useState(false);
-  const { prices, connected } = usePrices();
-  const isPhone = useMediaQuery("(max-width: 899px)");   // bottom tab bar layout
-
-  // Wire token into api.js — use auth.token (already fetched by useAuth)
-  // so it's available synchronously. No race condition with API calls.
-  useEffect(() => {
-    if (auth.token) {
-      console.log("[Auth] Token ready — wiring into api.js");
-      setTokenGetter(() => Promise.resolve(auth.token));
-      setTokenReady(true);
-    } else {
-      console.log("[Auth] No token — using getIdToken() fallback");
-      setTokenGetter(() => auth.user?.getIdToken() ?? Promise.resolve(null));
-      setTokenReady(false);
-    }
-  }, [auth.token, auth.user]);
-
-  // Step 2: fetch data — 100ms delay ensures token getter is propagated
-  // before the first authenticated API call fires
-  const fetchPortfolioSummary = useCallback(
-    () => getPortfolioOverview().then(ov => setPortfolioValue(ov.summary)).catch(() => {}),
-    []
-  );
-
-  useEffect(() => {
-    // Depend on auth.token (not auth.user) so this effect fires AFTER
-    // the token-setter effect above — guaranteeing the Bearer token
-    // is wired into api.js before any authenticated API call fires.
-    if (!auth.token || auth.isPending) return;
-    console.log("[Auth] Token confirmed — loading watchlist + portfolio");
-
-    getWatchlist()
-      .then(data => {
-        setWatchlist(data.symbols?.length ? data.symbols : DEFAULT_TICKERS);
-        setWatchlistReady(true);
-      })
-      .catch(() => {
-        // Don't overwrite with defaults on error — only seed if nothing loaded yet
-        setWatchlist(prev => prev.length ? prev : DEFAULT_TICKERS);
-        setWatchlistReady(true);
-      });
-    fetchPortfolioSummary();
-
-    const iv = setInterval(fetchPortfolioSummary, 60000);
-    return () => clearInterval(iv);
-  }, [auth.token, auth.isPending, fetchPortfolioSummary]);
-
-  const openPaywall = (feature) =>
-    window.dispatchEvent(new CustomEvent(PAYWALL_EVENT, { detail: { feature } }));
-
-  const navTo = async (name) => {
-    const feature = ROUTE_FEATURE[name];
-    if (feature) {
-      const ok = await checkFeature(feature);       // loads access first if needed
-      if (ok === null) {                            // couldn't reach the server: stay put
-        setAccessNotice("Couldn't check your plan just now. Retrying — try again in a few seconds.");
-        return;
-      }
-      if (!ok) { openPaywall(feature); return; }
-    }
-    setAccessNotice(null);
-    go(name);
-    if (name === "auto" || name === "manual") fetchPortfolioSummary();
-  };
-
-  // Access can change while the app is open (trial ends, coupon expires, etc.),
-  // and links can point at locked pages: if the open page isn't allowed, go Home and show why.
-  useEffect(() => {
-    const feature = ROUTE_FEATURE[route.name];
-    if (feature && access && access.features?.[feature] !== true) {
-      go("home");
-      openPaywall(feature);
-    }
-  }, [access, route.name]);
-
-  useEffect(() => { if (access) setAccessNotice(null); }, [access]);
-
-  useEffect(() => {
-    if (auth.isAdmin && !AdminPage) {
-      import("./pages/Admin").then(m => setAdminPage(() => m.default));
-    }
-  }, [auth.isAdmin]);
-
-  const handleAdd    = async (sym) => {
-    try { const d = await addToWatchlist(sym); setWatchlist(d.symbols); } catch {}
-  };
-  const handleRemove = async (sym) => {
-    // Optimistic update — remove immediately so the UI feels instant
-    setWatchlist(prev => prev.filter(s => s !== sym));
-    try {
-      const d = await removeFromWatchlist(sym);
-      setWatchlist(d.symbols); // sync with server's canonical list
-    } catch {
-      // Rollback — re-add the symbol if the API call failed
-      setWatchlist(prev => prev.includes(sym) ? prev : [...prev, sym]);
-    }
-  };
-
-  if (auth.user === undefined) return (
-    <div style={splash}><span style={splashText}>SignalBoard</span><span style={splashSub}>Loading…</span></div>
-  );
+  if (auth.user === undefined) return <Splash />;
   if (!auth.user) return <Login onGoogle={auth.loginGoogle} error={auth.error} loading={auth.loading} />;
   if (auth.isPending) return <PendingScreen user={auth.user} />;
-
-  const page = (() => {
-    switch (route.name) {
-      case "stock":    return <StockPage symbol={route.param} watchlist={watchlist} onAdd={handleAdd} onRemove={handleRemove}
-                                         isAdmin={auth.isAdmin} onUnlock={openPaywall} />;
-      case "signals":  return <div className="sb-page sb-legacy"><Signals watchlist={watchlist} /></div>;
-      case "auto":     return <div className="sb-page sb-legacy"><Trader view="strategies" onPortfolioUpdate={setPortfolioValue} tokenReady={tokenReady} prices={prices} /></div>;
-      case "manual":   return <div className="sb-page sb-legacy"><Trader view="manual" onPortfolioUpdate={setPortfolioValue} tokenReady={tokenReady} prices={prices} /></div>;
-      case "chat":     return <div className="sb-page sb-legacy"><Chat watchlist={watchlist} /></div>;
-      case "guide":    return <div className="sb-page sb-legacy"><UserGuide /></div>;
-      case "account":  return <Account auth={auth} connected={connected} />;
-      case "terminal": return <div className="sb-page wide sb-legacy"><LiveDashboard watchlist={watchlist} onAdd={handleAdd} onRemove={handleRemove} prices={prices} tokenReady={tokenReady} /></div>;
-      case "admin":    return <div className="sb-page wide sb-legacy">{auth.isAdmin ? (AdminPage ? <AdminPage /> : null) : <div style={denied}>Access denied.</div>}</div>;
-      default:         return <Home watchlist={watchlist} onUnlock={openPaywall} />;
-    }
-  })();
-  const active = navFor(route.name);
 
   return (
     <AuthContext.Provider value={auth}>
       <SignedInHooks />
       <TermsGate>
-      <div className="sb-app">
-        {isPhone ? (
-          route.name !== "stock" && (
-            <header className="sb-phead">
-              <Logo onClick={() => go("home")} />
-              <div style={{ flex: 1, minWidth: 0, maxWidth: 260 }}>
-                <SearchBar watchlist={watchlist} onSelect={sym => go(`stock/${encodeURIComponent(sym)}`)} fullWidth placeholder="Search" />
-              </div>
-            </header>
-          )
-        ) : (
-          <TopBar active={active} onNav={navTo} isLocked={isLocked} watchlist={watchlist} />
-        )}
-
-        {(accessNotice || auth.idleWarning) && (
-          <div style={{ maxWidth: 1120, margin: "12px auto 0", padding: "0 20px" }}>
-            {accessNotice && <div style={notice}>{accessNotice}</div>}
-            {auth.idleWarning && <div style={notice}>⏱ Signing out in 5 min — tap anywhere to stay signed in.</div>}
-          </div>
-        )}
-        <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 20px" }}>
-          <BillingReturnNotice />
-          <LiquidationNotice />
-        </div>
-
-        {page}
-
-        {isPhone && <BottomNav active={active} onNav={navTo} isLocked={isLocked} />}
-      </div>
-      <PaywallModal />
-      <RedeemCouponModal />
+        <Shell auth={auth} />
+        <PaywallModal />
+        <RedeemCouponModal />
       </TermsGate>
     </AuthContext.Provider>
   );
 }
-
-const splash       = { minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", background:"#0d1117" };
-const splashText   = { fontSize:28, fontWeight:700, color:"#e6edf3", letterSpacing:"-0.5px" };
-const splashSub    = { fontSize:14, color:"#8b949e", marginTop:8 };
-const appWrap      = { minHeight:"100vh", display:"flex", flexDirection:"column", background:"var(--color-bg,#0d1117)", color:"var(--color-text,#e6edf3)" };
-const header       = { display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 1.5rem", height:52, borderBottom:"1px solid var(--color-border,#30363d)", background:"var(--color-surface,#161b22)", flexShrink:0 };
-const logoText     = { fontSize:18, fontWeight:700, color:"var(--color-text,#e6edf3)", letterSpacing:"-0.5px" };
-const headerRight  = { display:"flex", alignItems:"center", gap:10 };
-const wsStatus     = { fontSize:12 };
-const adminBadge   = { fontSize:11, background:"#388bfd22", border:"1px solid #388bfd55", color:"#58a6ff", borderRadius:4, padding:"2px 7px", fontWeight:600 };
-const userEmail    = { fontSize:12, color:"#8b949e", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" };
-const logoutBtn    = { padding:"4px 10px", background:"transparent", border:"1px solid #30363d", borderRadius:6, color:"#8b949e", fontSize:12, cursor:"pointer" };
-const tabBar       = { display:"flex", borderBottom:"1px solid var(--color-border,#30363d)", background:"var(--color-surface,#161b22)", padding:"0 1rem", flexShrink:0 };
-const tabBtn       = { padding:"10px 16px", border:"none", borderBottom:"2px solid transparent", background:"transparent", color:"#8b949e", fontSize:13, fontWeight:500, cursor:"pointer", transition:"all 0.15s" };
-const tabBtnMobile = { padding:"10px 12px", whiteSpace:"nowrap", flexShrink:0 };
-const menuBtn      = { width:36, height:36, display:"flex", alignItems:"center", justifyContent:"center", background:"transparent", border:"1px solid #30363d", borderRadius:6, color:"#e6edf3", fontSize:16, cursor:"pointer" };
-const menuBackdrop = { position:"fixed", inset:0, top:52, background:"rgba(1,4,9,0.5)", zIndex:-1 };
-const mobileMenu   = { position:"absolute", top:"100%", left:0, right:0, background:"var(--color-surface,#161b22)", borderBottom:"1px solid var(--color-border,#30363d)", padding:"12px 0.75rem", display:"flex", flexDirection:"column", gap:12, boxShadow:"0 8px 24px rgba(0,0,0,0.5)" };
-const tabBtnActive = { color:"#e6edf3", borderBottomColor:"#2ea043" };
-const main         = { flex:1, overflow:"auto", padding:"1.5rem" };
-const notice       = { marginTop: 8, padding: "8px 12px", borderRadius: 8, fontSize: 13, background: "#f0a00015", border: "1px solid #f0a00055", color: "#f0a000" };
-const denied       = { color:"#f85149", padding:"2rem", fontSize:14 };
-const portfolioBar = { display:"flex", alignItems:"center", gap:6, background:"#0d1117", border:"1px solid #30363d", borderRadius:7, padding:"4px 12px", cursor:"pointer", transition:"border-color 0.15s" };
