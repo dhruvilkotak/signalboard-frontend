@@ -1,20 +1,18 @@
 // src/pages/Signup.jsx
-// Registration — Google OR email/password + reCAPTCHA + Terms modal
+// Registration — Google only (verified email) + reCAPTCHA + Terms modal.
+// Email/password sign-up was removed so nobody can register with a fake address.
+// Existing email/password accounts can still sign in on the Login page.
 
 import { useState, useEffect, useRef } from "react";
-import {
-  createUserWithEmailAndPassword,
-  signInWithPopup,
-  signOut,
-} from "firebase/auth";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { signInWithPopup, signOut } from "firebase/auth";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, provider, db } from "../lib/firebase";
 import TermsModal, { TERMS_VERSION } from "../components/TermsModal";
 
 const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
 
 export default function Signup({ onBackToLogin }) {
-  const [method,       setMethod]       = useState(null); // null | "email" | "google"
+  const method = "google";                              // only sign-up method
   const [step,         setStep]         = useState("form"); // form | pending
   const [loading,      setLoading]      = useState(false);
   const [errorMsg,     setErrorMsg]     = useState(null);
@@ -26,9 +24,6 @@ export default function Signup({ onBackToLogin }) {
 
   const [form, setForm] = useState({
     name:    "",
-    email:   "",
-    password:"",
-    confirm: "",
     reason:  "",
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -70,11 +65,6 @@ export default function Signup({ onBackToLogin }) {
     if (!form.reason.trim()) return "Please tell us why you want access.";
     if (!agreedTerms)        return "Please read and agree to the Terms of Use & Privacy Policy.";
     if (!captchaToken)       return "Please complete the reCAPTCHA verification.";
-    if (method === "email") {
-      if (!form.email.trim())       return "Please enter your email.";
-      if (form.password.length < 6) return "Password must be at least 6 characters.";
-      if (form.password !== form.confirm) return "Passwords don't match.";
-    }
     return null;
   };
 
@@ -103,15 +93,19 @@ export default function Signup({ onBackToLogin }) {
     setErrorMsg(null);
 
     try {
-      if (method === "email") {
-        const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
-        await saveUser(cred.user, "email");
+      const cred = await signInWithPopup(auth, provider);
+      // Already registered with this Google account? Don't overwrite their profile.
+      const existing = await getDoc(doc(db, "users", cred.user.uid));
+      if (existing.exists()) {
         await signOut(auth);
-      } else {
-        const cred = await signInWithPopup(auth, provider);
-        await saveUser(cred.user, "google");
-        await signOut(auth);
+        const st = existing.data()?.status;
+        setErrorMsg(st === "pending"
+          ? "You've already requested access with this Google account. We'll email you once it's approved."
+          : "You already have an account with this Google account. Please sign in instead.");
+        return;
       }
+      await saveUser(cred.user, "google");
+      await signOut(auth);
       setStep("pending");
     } catch (e) {
       setErrorMsg(friendlyError(e.code));
@@ -149,57 +143,6 @@ export default function Signup({ onBackToLogin }) {
     );
   }
 
-  // ── Method selector ────────────────────────────────────────────────────────
-  if (!method) {
-    return (
-      <div style={s.bg}>
-        <div style={s.card}>
-          <div style={s.logo}>
-            <span style={s.logoText}>SignalBoard</span>
-            <span style={s.logoSub}>Request Access</span>
-          </div>
-          <p style={{ fontSize:13, color:"#8b949e", textAlign:"center", marginBottom:"1.5rem", lineHeight:1.6 }}>
-            Choose how you'd like to create your account.
-          </p>
-
-          <button style={s.methodCard} onClick={() => setMethod("google")}>
-            <svg width="22" height="22" viewBox="0 0 48 48">
-              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-            </svg>
-            <div style={{ flex:1, textAlign:"left" }}>
-              <div style={{ fontSize:14, fontWeight:600, color:"#e6edf3" }}>Continue with Google</div>
-              <div style={{ fontSize:12, color:"#8b949e", marginTop:2 }}>Quick setup using your Google account</div>
-            </div>
-            <span style={{ color:"#8b949e" }}>→</span>
-          </button>
-
-          <div style={s.divider}>
-            <span style={s.dividerLine} />
-            <span style={s.dividerText}>or</span>
-            <span style={s.dividerLine} />
-          </div>
-
-          <button style={s.methodCard} onClick={() => setMethod("email")}>
-            <span style={{ fontSize:22 }}>✉️</span>
-            <div style={{ flex:1, textAlign:"left" }}>
-              <div style={{ fontSize:14, fontWeight:600, color:"#e6edf3" }}>Sign up with Email</div>
-              <div style={{ fontSize:12, color:"#8b949e", marginTop:2 }}>Create account with email and password</div>
-            </div>
-            <span style={{ color:"#8b949e" }}>→</span>
-          </button>
-
-          <p style={{ textAlign:"center", fontSize:12, color:"#8b949e", marginTop:"1.5rem" }}>
-            Already have an account?{" "}
-            <button style={s.linkBtn} onClick={onBackToLogin}>Sign In</button>
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   // ── Registration form ──────────────────────────────────────────────────────
   return (
     <div style={s.bg}>
@@ -214,9 +157,14 @@ export default function Signup({ onBackToLogin }) {
         <div style={s.logo}>
           <span style={s.logoText}>SignalBoard</span>
           <span style={s.logoSub}>
-            {method === "google" ? "Request Access with Google" : "Request Access with Email"}
+            Request Access with Google
           </span>
         </div>
+
+        <p style={{ fontSize:12, color:"#8b949e", textAlign:"center", margin:"0 0 1rem", lineHeight:1.6 }}>
+          Fill in the form, then sign in with your Google account to send your request.
+          We use your Google email, so no password is needed.
+        </p>
 
         {errorMsg && <div style={s.error}>{errorMsg}</div>}
 
@@ -228,27 +176,6 @@ export default function Signup({ onBackToLogin }) {
             <input style={s.input} type="text" placeholder="Your full name"
               value={form.name} onChange={e => set("name", e.target.value)} required />
           </div>
-
-          {/* Email + Password (email method only) */}
-          {method === "email" && <>
-            <div style={s.fieldGroup}>
-              <label style={s.label}>Email *</label>
-              <input style={s.input} type="email" placeholder="your@email.com"
-                value={form.email} onChange={e => set("email", e.target.value)} required />
-            </div>
-            <div style={s.fieldGroup}>
-              <label style={s.label}>Password *</label>
-              <input style={s.input} type="password" placeholder="Min 6 characters"
-                value={form.password} onChange={e => set("password", e.target.value)}
-                autoComplete="new-password" required />
-            </div>
-            <div style={s.fieldGroup}>
-              <label style={s.label}>Confirm Password *</label>
-              <input style={s.input} type="password" placeholder="Repeat password"
-                value={form.confirm} onChange={e => set("confirm", e.target.value)}
-                autoComplete="new-password" required />
-            </div>
-          </>}
 
           {/* Reason */}
           <div style={s.fieldGroup}>
@@ -288,17 +215,13 @@ export default function Signup({ onBackToLogin }) {
           </div>
 
           <button style={s.btnPrimary} type="submit" disabled={loading}>
-            {loading ? "Submitting…" :
-              method === "google" ? "Request Access with Google" : "Request Access with Email"}
+            {loading ? "Opening Google…" : "Continue with Google"}
           </button>
 
         </form>
 
         <p style={{ textAlign:"center", fontSize:12, color:"#8b949e", marginTop:"1rem" }}>
-          <button style={s.linkBtn} onClick={() => { setMethod(null); setErrorMsg(null); }}>
-            ← Back
-          </button>
-          {" · "}
+          Already have an account?{" "}
           <button style={s.linkBtn} onClick={onBackToLogin}>Sign In</button>
         </p>
       </div>
@@ -308,10 +231,10 @@ export default function Signup({ onBackToLogin }) {
 
 function friendlyError(code) {
   const map = {
-    "auth/email-already-in-use": "An account with this email already exists. Try signing in.",
-    "auth/weak-password":        "Password must be at least 6 characters.",
-    "auth/invalid-email":        "Please enter a valid email address.",
-    "auth/popup-closed-by-user": "Google sign-up was cancelled.",
+    "auth/popup-closed-by-user":   "Google sign-up was cancelled.",
+    "auth/cancelled-popup-request": "Google sign-up was cancelled.",
+    "auth/popup-blocked":          "Your browser blocked the Google window. Allow pop-ups for this site and try again.",
+    "auth/network-request-failed": "Network error. Check your connection and try again.",
   };
   return map[code] || "Something went wrong. Please try again.";
 }
