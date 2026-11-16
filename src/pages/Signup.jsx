@@ -8,6 +8,7 @@ import { signInWithPopup, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, provider, db } from "../lib/firebase";
 import TermsModal, { TERMS_VERSION } from "../components/TermsModal";
+import GoogleButton from "../components/GoogleButton";
 
 const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
 
@@ -214,9 +215,7 @@ export default function Signup({ onBackToLogin }) {
             <div ref={captchaRef} />
           </div>
 
-          <button style={s.btnPrimary} type="submit" disabled={loading}>
-            {loading ? "Opening Google…" : "Continue with Google"}
-          </button>
+          <GoogleButton type="submit" loading={loading} />
 
         </form>
 
