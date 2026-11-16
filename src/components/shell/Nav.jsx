@@ -16,7 +16,7 @@ export const navFor = (name) =>
   ({ stock: "home", manual: "home", terminal: "home", guide: "account", admin: "account" }[name] || name);
 
 export function Logo({ onClick }) {
-  return <div className="sb-logo" onClick={onClick}>Signal<b>//</b>Board</div>;
+  return <div className="sb-logo" onClick={onClick}>SignalBoard</div>;
 }
 
 export function TopBar({ active, onNav, isLocked, watchlist }) {

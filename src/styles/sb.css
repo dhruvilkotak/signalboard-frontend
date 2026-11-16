@@ -17,7 +17,6 @@ body { background: var(--sb-bg); }
 /* ── Desktop top bar ── */
 .sb-top { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 28px; height: 64px; padding: 0 32px; background: var(--sb-bg); border-bottom: 1px solid var(--sb-line); }
 .sb-logo { font-weight: 700; font-size: 18px; letter-spacing: -0.3px; white-space: nowrap; cursor: pointer; }
-.sb-logo b { color: var(--sb-brand); }
 .sb-top .sb-search { flex: 0 1 420px; }
 .sb-top nav { margin-left: auto; display: flex; gap: 24px; font-size: 15px; font-weight: 500; }
 .sb-top nav button { color: var(--sb-muted); padding: 6px 0; border-bottom: 2px solid transparent !important; }
