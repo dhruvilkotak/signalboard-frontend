@@ -159,7 +159,7 @@ export default function App() {
   if (auth.user === undefined) return (
     <div style={splash}><span style={splashText}>SignalBoard</span><span style={splashSub}>Loading…</span></div>
   );
-  if (!auth.user) return <Login onLogin={auth.loginEmail} onGoogle={auth.loginGoogle} error={auth.error} loading={auth.loading} />;
+  if (!auth.user) return <Login onGoogle={auth.loginGoogle} error={auth.error} loading={auth.loading} />;
   if (auth.isPending) return <PendingScreen user={auth.user} />;
 
   const TABS = [
