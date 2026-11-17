@@ -4,10 +4,9 @@
 // Existing email/password accounts can still sign in on the Login page.
 
 import { useState, useEffect, useRef } from "react";
-import { signOut } from "firebase/auth";
+import { signInWithPopup, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "../lib/firebase";
-import { signInWithGoogle } from "../lib/googleSignIn";
+import { auth, provider, db } from "../lib/firebase";
 import TermsModal, { TERMS_VERSION } from "../components/TermsModal";
 import GoogleButton from "../components/GoogleButton";
 
@@ -95,7 +94,7 @@ export default function Signup({ onBackToLogin }) {
     setErrorMsg(null);
 
     try {
-      const cred = await signInWithGoogle();
+      const cred = await signInWithPopup(auth, provider);
       // Already registered with this Google account? Don't overwrite their profile.
       const existing = await getDoc(doc(db, "users", cred.user.uid));
       if (existing.exists()) {

@@ -421,10 +421,10 @@ export default function SignalTab({ symbol, currentPrice, isAdmin = false, activ
         borderRadius: 12, padding: "16px 20px", marginBottom: 14,
         boxShadow: `0 0 24px ${colors.color}18`,
       }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap", gap: "12px 0" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
 
           {/* Signal + confidence + summary */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 240px", minWidth: 0, marginRight: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, marginRight: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ fontFamily: MONO, fontSize: 28, fontWeight: 700, color: colors.color, letterSpacing: 2 }}>
                 {signal.signal}
