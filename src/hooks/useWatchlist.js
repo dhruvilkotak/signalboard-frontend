@@ -17,13 +17,13 @@ export function useWatchlist(enabled) {
 
   const add = useCallback(async (symbol) => {
     setWatchlist(prev => (prev.includes(symbol) ? prev : [...prev, symbol]));
-    try { setWatchlist((await addToWatchlist(symbol)).symbols); }
+    try { const d = await addToWatchlist(symbol); if (Array.isArray(d?.symbols)) setWatchlist(d.symbols); }
     catch { setWatchlist(prev => prev.filter(s => s !== symbol)); }
   }, []);
 
   const remove = useCallback(async (symbol) => {
     setWatchlist(prev => prev.filter(s => s !== symbol));
-    try { setWatchlist((await removeFromWatchlist(symbol)).symbols); }
+    try { const d = await removeFromWatchlist(symbol); if (Array.isArray(d?.symbols)) setWatchlist(d.symbols); }
     catch { setWatchlist(prev => (prev.includes(symbol) ? prev : [...prev, symbol])); }
   }, []);
 

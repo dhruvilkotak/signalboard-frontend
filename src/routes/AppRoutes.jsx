@@ -19,6 +19,7 @@ export default function AppRoutes({ route, auth, watchlist, prices, connected, t
   const { list, add, remove } = watchlist;
   switch (route.name) {
     case "stock":
+      if (!route.param) return <Home watchlist={list} onUnlock={openPaywall} />;
       return <StockPage symbol={route.param} watchlist={list} onAdd={add} onRemove={remove} isAdmin={auth.isAdmin} onUnlock={openPaywall} />;
     case "signals":  return <Legacy><Signals watchlist={list} /></Legacy>;
     case "auto":     return <Legacy><Trader view="strategies" tokenReady={tokenReady} prices={prices} /></Legacy>;
