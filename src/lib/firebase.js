@@ -2,9 +2,8 @@
 // Firebase SDK init — exports auth, db, and provider
 
 import { initializeApp } from "firebase/app";
-import { getAuth, initializeAuth, indexedDBLocalPersistence, GoogleAuthProvider } from "firebase/auth";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import { isNativeApp } from "./platform";
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -16,10 +15,6 @@ const firebaseConfig = {
 };
 
 const app      = initializeApp(firebaseConfig);
-// Inside the iPhone app, getAuth() can hang (it waits on a web popup helper that
-// WKWebView doesn't support), so the app uses initializeAuth with IndexedDB instead.
-export const auth     = isNativeApp
-  ? initializeAuth(app, { persistence: indexedDBLocalPersistence })
-  : getAuth(app);
+export const auth     = getAuth(app);
 export const db       = getFirestore(app);
 export const provider = new GoogleAuthProvider();

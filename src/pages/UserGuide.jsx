@@ -2,7 +2,6 @@
 // How to use SignalBoard — for family & friends onboarding
 
 import { useState } from "react";
-import { useIsMobile } from "../hooks/useIsMobile";
 
 const MONO = "'IBM Plex Mono', monospace";
 const GREEN = "#3fb950";
@@ -384,7 +383,6 @@ function renderContent(block, i) {
 export default function UserGuide() {
   const [active, setActive] = useState("what");
   const current = sections.find(s => s.id === active);
-  const isMobile = useIsMobile();
 
   return (
     <div style={{ maxWidth: 780, margin: "0 auto", padding: "0 4px" }}>
@@ -393,7 +391,7 @@ export default function UserGuide() {
       <div style={{
         background: "linear-gradient(135deg, #0d1117 0%, #161b22 100%)",
         border: "1px solid #21262d", borderRadius: 14,
-        padding: isMobile ? "14px 16px" : "20px 24px", marginBottom: 16,
+        padding: "20px 24px", marginBottom: 16,
         display: "flex", alignItems: "center", gap: 14,
       }}>
         <span style={{ fontSize: 36 }}>📖</span>
@@ -407,10 +405,10 @@ export default function UserGuide() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "200px 1fr", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 12 }}>
 
         {/* Sidebar nav */}
-        <div className={isMobile ? "h-scroll" : undefined} style={{ display: "flex", flexDirection: isMobile ? "row" : "column", gap: 4 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {sections.map(s => (
             <button key={s.id} onClick={() => setActive(s.id)} style={{
               fontFamily: MONO, fontSize: 11, textAlign: "left",
@@ -420,7 +418,6 @@ export default function UserGuide() {
               color: active === s.id ? "#58a6ff" : "#8b949e",
               fontWeight: active === s.id ? 700 : 400,
               display: "flex", alignItems: "center", gap: 8,
-              ...(isMobile ? { whiteSpace: "nowrap", flexShrink: 0 } : {}),
             }}>
               <span>{s.icon}</span>
               <span>{s.title}</span>
@@ -432,8 +429,8 @@ export default function UserGuide() {
         {current && (
           <div style={{
             background: "#161b22", border: "1px solid #21262d",
-            borderRadius: 12, padding: isMobile ? "16px 14px" : "20px 20px",
-            minHeight: isMobile ? 0 : 400,
+            borderRadius: 12, padding: "20px 20px",
+            minHeight: 400,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid #21262d" }}>
               <span style={{ fontSize: 22 }}>{current.icon}</span>
