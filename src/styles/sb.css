@@ -12,7 +12,8 @@ body { background: var(--sb-bg); }
 .sb-app { min-height: 100vh; background: var(--sb-bg); color: var(--sb-text); font-family: var(--sb-font); -webkit-font-smoothing: antialiased; }
 .sb-num { font-family: var(--sb-num); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .sb-up { color: var(--sb-up); } .sb-down { color: var(--sb-down); } .sb-muted { color: var(--sb-muted); }
-.sb-app button { font-family: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+/* Low-specificity reset (:where) so older pages' own button classes, like .btn, still win */
+:where(.sb-app) button { font-family: inherit; color: inherit; background: none; border: none; cursor: pointer; }
 
 /* ── Desktop top bar ── */
 .sb-top { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 28px; height: 64px; padding: 0 32px; background: var(--sb-bg); border-bottom: 1px solid var(--sb-line); }
