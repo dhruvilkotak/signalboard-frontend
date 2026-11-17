@@ -27,3 +27,6 @@ Thumbs.db
 .vscode/
 .idea/
 .vercel
+
+# iOS app (Capacitor) — Firebase iOS config stays local, like .env.local
+ios/App/App/GoogleService-Info.plist

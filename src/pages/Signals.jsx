@@ -206,7 +206,7 @@ function HistoryModal({ sig, onClose }) {
                     padding: "10px 20px",
                     background: isCurrent ? `${colors.color}08` : "transparent",
                     borderBottom: "1px solid #21262d",
-                    display: "flex", alignItems: "center", gap: 12,
+                    display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
                   }}
                 >
                   {/* Signal badge */}

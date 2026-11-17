@@ -4,6 +4,7 @@ import SearchBar from "../components/SearchBar";
 import SignalTab from "../components/SignalTab";
 import { useAuthContext } from "../App";
 import PortfolioTab from "../components/PortfolioTab";
+import { useIsMobile, useIsCompact } from "../hooks/useIsMobile";
 
 const API    = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 const WS_URL = (import.meta.env.VITE_WS_URL || "wss://signalboard.duckdns.org")
@@ -144,6 +145,40 @@ function TickerRow({ symbol, price, selected, onClick, onRemove }) {
   );
 }
 
+// ── Mobile ticker chip (horizontal strip on phones) ─────────────────────────
+function TickerChip({ symbol, price, selected, onClick, onRemove }) {
+  const flash = useFlash(price?.price);
+  const chg   = price?.change_pct ?? 0;
+  const up    = chg >= 0;
+  return (
+    <div onClick={onClick} style={{
+      flexShrink: 0, display: "flex", alignItems: "center", gap: 8,
+      padding: "6px 10px", borderRadius: 8, cursor: "pointer",
+      border: selected ? "1px solid #58a6ff" : "1px solid #21262d",
+      background: selected ? "#161b22" : flash === "up" ? "#0d2a1a" : flash === "dn" ? "#2a0d0d" : "#0d1117",
+      transition: "background 0.4s",
+    }}>
+      <div>
+        <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, fontWeight: 700, color: "#e6edf3" }}>{symbol}</div>
+        {price ? (
+          <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, color: up ? "#3fb950" : "#f85149", whiteSpace: "nowrap" }}>
+            ${price.price?.toFixed(2)} {up ? "▲" : "▼"}{Math.abs(chg).toFixed(2)}%
+          </div>
+        ) : (
+          <div style={{ width: 70, height: 12, background: "#1a1f2e", borderRadius: 3, marginTop: 2, animation: "shimmer 1.5s infinite" }} />
+        )}
+      </div>
+      {selected && (
+        <button onClick={e => { e.stopPropagation(); onRemove(symbol); }} aria-label={`Remove ${symbol}`} style={{
+          width: 22, height: 22, borderRadius: "50%", background: "#f8514930",
+          border: "1px solid #f8514960", color: "#f85149", fontSize: 13, fontWeight: 700,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>×</button>
+      )}
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, tabs, activeTab }) {
   const { prices, status, lastUpdate, refresh } = usePrices(watchlist);
@@ -153,6 +188,8 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
   const [interval,   setIntervalV]  = useState("D");
   const [chartStyle, setChartStyle] = useState("1");
   const [filter,     setFilter]     = useState("ALL");
+  const isMobile  = useIsMobile();
+  const isCompact = useIsCompact();
 
   useEffect(() => {
     if (!watchlist.includes(selected) && watchlist.length > 0)
@@ -190,7 +227,7 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
   ];
 
   return (
-    <div style={{ height: "100vh", background: "#0d1117", color: "#e6edf3", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ height: isMobile ? "auto" : "100vh", background: "#0d1117", color: "#e6edf3", display: "flex", flexDirection: "column", overflow: isMobile ? "visible" : "hidden", ...(isMobile ? { margin: "-0.75rem" } : {}) }}>
       <style>{`
         @keyframes shimmer { 0%,100%{opacity:.3} 50%{opacity:.8} }
         @keyframes blink   { 0%,100%{opacity:1}  50%{opacity:.2} }
@@ -203,13 +240,15 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
       {/* ── Top nav ── */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 12px", height: 44, flexShrink: 0,
+        padding: isMobile ? "8px 10px" : "0 12px", height: isMobile ? "auto" : 44, flexShrink: 0,
         background: "#010409", borderBottom: "1px solid #21262d", gap: 8,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          {!isMobile && (
           <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, fontWeight: 700, color: "#e6edf3" }}>
             SIGNAL BOARD
           </span>
+          )}
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <div style={{
               width: 6, height: 6, borderRadius: "50%",
@@ -222,7 +261,9 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
           </div>
         </div>
 
-        <SearchBar watchlist={watchlist} onAdd={onAdd} limit={50} />
+        <div style={isMobile ? { flex: 1, minWidth: 0 } : undefined}>
+          <SearchBar watchlist={watchlist} onAdd={onAdd} limit={50} fullWidth={isMobile} />
+        </div>
 
         <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
           {tabs?.map(t => (
@@ -241,7 +282,7 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
         </div>
 
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexShrink: 0 }}>
-          {[["ADV", adv, "#3fb950"], ["DEC", dec, "#f85149"]].map(([l, v, c]) => (
+          {!isCompact && [["ADV", adv, "#3fb950"], ["DEC", dec, "#f85149"]].map(([l, v, c]) => (
             <div key={l} style={{ display: "flex", gap: 4, alignItems: "center" }}>
               <span style={{ fontSize: 8, color: "#6e7681", fontFamily: "'IBM Plex Mono',monospace" }}>{l}</span>
               <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, fontWeight: 700, color: c }}>{v}</span>
@@ -250,9 +291,9 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
           <button onClick={refresh} style={{
             fontSize: 10, color: "#6e7681", fontFamily: "'IBM Plex Mono',monospace",
             background: "#161b22", border: "1px solid #21262d",
-            padding: "2px 7px", borderRadius: 5,
+            padding: isMobile ? "6px 12px" : "2px 7px", borderRadius: 5,
           }}>↻</button>
-          {lastUpdate && (
+          {lastUpdate && !isCompact && (
             <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, color: "#3a4258" }}>
               {lastUpdate.toLocaleTimeString()}
             </span>
@@ -261,9 +302,27 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
       </div>
 
       {/* ── Body ── */}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+      <div style={{ display: "flex", flex: 1, overflow: isMobile ? "visible" : "hidden", flexDirection: isMobile ? "column" : "row" }}>
+
+        {/* Mobile: horizontal ticker strip */}
+        {isMobile && (
+          <div className="h-scroll" style={{ display: "flex", gap: 6, padding: "8px 10px", borderBottom: "1px solid #21262d", background: "#010409" }}>
+            {watchlist.length === 0 ? (
+              <div style={{ padding: 8, color: "#6e7681", fontSize: 11, fontFamily: "'IBM Plex Mono',monospace" }}>
+                Search and add stocks above
+              </div>
+            ) : watchlist.map(sym => (
+              <TickerChip key={sym} symbol={sym} price={prices[sym]}
+                selected={selected === sym}
+                onClick={() => handleSelectSymbol(sym)}
+                onRemove={onRemove}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Left: watchlist */}
+        {!isMobile && (
         <div style={{ width: 188, borderRight: "1px solid #21262d", display: "flex", flexDirection: "column", flexShrink: 0 }}>
           <div style={{ padding: "6px 8px", borderBottom: "1px solid #21262d", display: "flex", gap: 3 }}>
             {["ALL","STOCK","ETF"].map(f => (
@@ -297,23 +356,25 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
             <span style={{ color: "#58a6ff" }}>Yahoo Finance</span>
           </div>
         </div>
+        )}
 
         {/* Right: chart area */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: isMobile ? "visible" : "hidden" }}>
 
           {/* Symbol header */}
           <div style={{
-            padding: "7px 14px", borderBottom: "1px solid #21262d",
+            padding: isMobile ? "8px 10px" : "7px 14px", borderBottom: "1px solid #21262d",
             display: "flex", alignItems: "center", justifyContent: "space-between",
             flexShrink: 0, background: "#0d1117",
+            ...(isMobile ? { flexWrap: "wrap", gap: 8 } : {}),
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, ...(isMobile ? { flexWrap: "wrap", rowGap: 2 } : {}) }}>
               <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 18, fontWeight: 700, color: "#e6edf3" }}>
                 {selected}
               </span>
               {price && (
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                  <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 24, fontWeight: 700, color: "#e6edf3" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: isMobile ? 20 : 24, fontWeight: 700, color: "#e6edf3" }}>
                     ${price.price?.toFixed(2)}
                   </span>
                   <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, color: up ? "#3fb950" : "#f85149" }}>
@@ -334,11 +395,11 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
             </div>
 
             {innerTab === "chart" && (
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", ...(isMobile ? { width: "100%", justifyContent: "space-between" } : {}) }}>
                 <div style={{ display: "flex", gap: 2, background: "#161b22", borderRadius: 7, padding: 3 }}>
                   {[["1","1m"],["5","5m"],["15","15m"],["60","1H"],["D","1D"],["W","1W"],["M","1M"]].map(([val, label]) => (
                     <button key={val} onClick={() => setIntervalV(val)} style={{
-                      padding: "2px 7px", borderRadius: 4,
+                      padding: isMobile ? "6px 8px" : "2px 7px", borderRadius: 4,
                       background: interval === val ? "#21262d" : "transparent",
                       color: interval === val ? "#e6edf3" : "#6e7681",
                       fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, fontWeight: 600,
@@ -348,7 +409,7 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
                 <div style={{ display: "flex", gap: 2, background: "#161b22", borderRadius: 7, padding: 3 }}>
                   {[["1","🕯️"],["3","📈"],["8","📊"]].map(([val, icon]) => (
                     <button key={val} onClick={() => setChartStyle(val)} style={{
-                      padding: "2px 7px", borderRadius: 4, fontSize: 11,
+                      padding: isMobile ? "4px 8px" : "2px 7px", borderRadius: 4, fontSize: 11,
                       background: chartStyle === val ? "#21262d" : "transparent",
                     }}>{icon}</button>
                   ))}
@@ -358,14 +419,15 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
           </div>
 
           {/* Inner tabs */}
-          <div style={{
+          <div className={isMobile ? "h-scroll" : undefined} style={{
             display: "flex", borderBottom: "1px solid #21262d",
             background: "#0d1117", flexShrink: 0, alignItems: "center",
           }}>
             {INNER_TABS.map(tab => (
               <button key={tab.id} onClick={() => setInnerTab(tab.id)} style={{
-                padding: "7px 14px", fontSize: 12,
+                padding: isMobile ? "10px 12px" : "7px 14px", fontSize: 12,
                 fontFamily: "'IBM Plex Sans',sans-serif",
+                whiteSpace: "nowrap", flexShrink: 0,
                 color: innerTab === tab.id ? "#58a6ff" : "#6e7681",
                 borderBottom: innerTab === tab.id ? "2px solid #58a6ff" : "2px solid transparent",
                 fontWeight: innerTab === tab.id ? 600 : 400,
@@ -383,7 +445,7 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
                 {tab.icon} {tab.label}
               </button>
             ))}
-            {price && (
+            {price && !isCompact && (
               <div style={{ marginLeft: "auto", display: "flex", gap: 12, padding: "0 14px", alignItems: "center" }}>
                 {[
                   ["O", `$${price.open?.toFixed(2)}`],
@@ -402,7 +464,7 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
           </div>
 
           {/* Widget area */}
-          <div style={{ flex: 1, overflow: "hidden" }}>
+          <div style={{ flex: 1, overflow: "hidden", ...(isMobile ? { flex: "none", height: "max(460px, calc(100dvh - 290px))" } : {}) }}>
             <div style={{ display: innerTab === "chart"     ? "block" : "none", height: "100%" }}>
               <iframe key={`chart-${selected}-${interval}-${chartStyle}`} src={tvChart(selected, interval, chartStyle)} width="100%" height="100%" />
             </div>
@@ -434,7 +496,7 @@ export default function LiveDashboard({ watchlist, onAdd, onRemove, onNavigate, 
               {price && (
                 <div style={{ padding: 16 }}>
                   <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, color: "#6e7681", marginBottom: 10, letterSpacing: 1 }}>LIVE — YAHOO FINANCE</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 8 }}>
                     {[
                       ["Price",      `$${price.price?.toFixed(2)}`],
                       ["Change",     `${chg>=0?"+":""}${chg?.toFixed(2)}%`],

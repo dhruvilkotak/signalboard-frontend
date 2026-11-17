@@ -114,7 +114,7 @@ Stored in <code style={code}>config/feature_flags</code>. Changes apply within 6
 </div>
 )}
 
-<table style={table}>
+<div className="table-scroll"><table style={table}>
 <thead>
   <tr>
     {["Flag", "Mode", "Allowlist UIDs", ""].map(h => <th key={h} style={th}>{h}</th>)}
@@ -169,7 +169,7 @@ Stored in <code style={code}>config/feature_flags</code>. Changes apply within 6
     );
   })}
 </tbody>
-</table>
+</table></div>
 
 <div style={{ marginTop:16, padding:"10px 14px", background:"#0d1117",
 border:"1px solid #30363d", borderRadius:8, fontSize:12, color:"#8b949e", lineHeight:1.6 }}>

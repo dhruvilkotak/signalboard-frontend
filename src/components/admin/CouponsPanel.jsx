@@ -125,7 +125,7 @@ export default function CouponsPanel() {
       {!coupons ? <div style={empty}>Loading…</div> : coupons.length === 0 ? (
         <div style={empty}>No coupons yet.</div>
       ) : (
-        <table style={table}>
+        <div className="table-scroll"><table style={table}>
           <thead>
             <tr>{["Code", "Access", "Used", "Expires", "Note", "Status", ""].map(h => <th key={h} style={th}>{h}</th>)}</tr>
           </thead>
@@ -151,7 +151,7 @@ export default function CouponsPanel() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
     </div>
   );

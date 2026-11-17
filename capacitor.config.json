@@ -1,0 +1,16 @@
+{
+  "appId": "com.dhruvil.signalboard",
+  "appName": "SignalBoard",
+  "webDir": "dist",
+  "backgroundColor": "#0d1117",
+  "ios": {
+    "contentInset": "always",
+    "backgroundColor": "#0d1117"
+  },
+  "plugins": {
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["google.com"]
+    }
+  }
+}

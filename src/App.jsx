@@ -5,6 +5,7 @@ import { useAuth } from "./hooks/useAuth";
 import { auth as firebaseAuth } from "./lib/firebase";
 import { PAYWALL_EVENT, setTokenGetter, setFirebaseAuth, getWatchlist, addToWatchlist, removeFromWatchlist, getPortfolioOverview } from "./lib/api";
 import { usePrices } from "./hooks/usePrices";
+import { useIsMobile, useIsCompact } from "./hooks/useIsMobile";
 
 import Login         from "./pages/Login";
 import LiveDashboard from "./pages/LiveDashboard";
@@ -60,6 +61,9 @@ export default function App() {
   const [portfolioValue, setPortfolioValue] = useState(null);
   const [tokenReady,     setTokenReady]     = useState(false);
   const { prices, connected } = usePrices();
+  const isMobile  = useIsMobile();   // phones: tighter tab bar + padding
+  const isCompact = useIsCompact();  // phones + tablets: header collapses into a ☰ menu
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Wire token into api.js — use auth.token (already fetched by useAuth)
   // so it's available synchronously. No race condition with API calls.
@@ -119,6 +123,7 @@ export default function App() {
       }
     }
     setAccessNotice(null);
+    setMenuOpen(false);
     setTab(newTab);
     if (newTab === "trader" || newTab === "manual") fetchPortfolioSummary(); // instant header refresh
   };
@@ -180,47 +185,95 @@ export default function App() {
       <SignedInHooks />
       <TermsGate>
       <div style={appWrap}>
-        <header style={header}>
-          <span style={logoText}>SignalBoard</span>
-          <div style={headerRight}>
-            {/* Portfolio mini bar */}
-            {portfolioValue && (
-              <button onClick={() => handleTabChange(hasFeature("autotrader") ? "trader" : "manual")} style={portfolioBar} title="Open your portfolio">
-                <span style={{ fontSize: 12 }}>💼</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", fontFamily: "'Space Mono',monospace" }}>
-                  ${tv.toFixed(2)}
-                </span>
-                <span style={{ fontSize: 10, color: "#6e7681", fontFamily: "'Space Mono',monospace" }}>
-                  Cash: ${avail.toFixed(0)}
-                </span>
-                <span style={{ fontSize: 9, color: "#6e7681", fontFamily: "'Space Mono',monospace" }}>PAPER</span>
+        {isCompact ? (
+          <header style={{ ...header, padding: "0 0.75rem", position: "relative", zIndex: 50 }}>
+            <span style={{ ...logoText, fontSize: 16 }}>SignalBoard</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {portfolioValue && (
+                <button onClick={() => handleTabChange(hasFeature("autotrader") ? "trader" : "manual")} style={{ ...portfolioBar, padding: "4px 8px" }} title="Open your portfolio">
+                  <span style={{ fontSize: 12 }}>💼</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", fontFamily: "'Space Mono',monospace" }}>
+                    ${tv.toFixed(2)}
+                  </span>
+                </button>
+              )}
+              <span style={wsStatus} title={connected ? "Live" : "Offline"}>{connected ? "🟢" : "🔴"}</span>
+              <button onClick={() => setMenuOpen(o => !o)} style={menuBtn} aria-label="Menu" aria-expanded={menuOpen}>
+                {menuOpen ? "✕" : "☰"}
               </button>
+            </div>
+            {menuOpen && (
+              <div onClick={() => setMenuOpen(false)} style={menuBackdrop} />
             )}
-            <TrialChip />
-            <CouponChip />
-            <SubscriptionChip />
-            <QuotaChip />
-            <span style={wsStatus}>{connected ? "🟢 Live" : "🔴 Offline"}</span>
-            {auth.idleWarning && (
-              <span style={{ fontSize:11, color:"#f0a000", background:"#f0a00015", border:"1px solid #f0a00040", borderRadius:4, padding:"2px 8px" }}>
-                ⏱ Signing out in 5 min
-              </span>
+            {menuOpen && (
+              <div style={mobileMenu}>
+                {portfolioValue && (
+                  <div style={{ fontSize: 11, color: "#8b949e", fontFamily: "'Space Mono',monospace" }}>
+                    💼 ${tv.toFixed(2)} · Cash: ${avail.toFixed(0)} · PAPER
+                  </div>
+                )}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                  <TrialChip />
+                  <CouponChip />
+                  <SubscriptionChip />
+                  <QuotaChip />
+                  {auth.isAdmin && <span style={adminBadge}>Admin</span>}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <span style={{ ...userEmail, maxWidth: "60vw" }}>{auth.user.email || auth.user.displayName}</span>
+                  <button style={{ ...logoutBtn, padding: "8px 14px" }} onClick={auth.logout}>Sign out</button>
+                </div>
+              </div>
             )}
-            {auth.isAdmin && <span style={adminBadge}>Admin</span>}
-            <span style={userEmail}>{auth.user.email || auth.user.displayName}</span>
-            <button style={logoutBtn} onClick={auth.logout}>Sign out</button>
+          </header>
+        ) : (
+          <header style={header}>
+            <span style={logoText}>SignalBoard</span>
+            <div style={headerRight}>
+              {/* Portfolio mini bar */}
+              {portfolioValue && (
+                <button onClick={() => handleTabChange(hasFeature("autotrader") ? "trader" : "manual")} style={portfolioBar} title="Open your portfolio">
+                  <span style={{ fontSize: 12 }}>💼</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#e6edf3", fontFamily: "'Space Mono',monospace" }}>
+                    ${tv.toFixed(2)}
+                  </span>
+                  <span style={{ fontSize: 10, color: "#6e7681", fontFamily: "'Space Mono',monospace" }}>
+                    Cash: ${avail.toFixed(0)}
+                  </span>
+                  <span style={{ fontSize: 9, color: "#6e7681", fontFamily: "'Space Mono',monospace" }}>PAPER</span>
+                </button>
+              )}
+              <TrialChip />
+              <CouponChip />
+              <SubscriptionChip />
+              <QuotaChip />
+              <span style={wsStatus}>{connected ? "🟢 Live" : "🔴 Offline"}</span>
+              {auth.idleWarning && (
+                <span style={{ fontSize:11, color:"#f0a000", background:"#f0a00015", border:"1px solid #f0a00040", borderRadius:4, padding:"2px 8px" }}>
+                  ⏱ Signing out in 5 min
+                </span>
+              )}
+              {auth.isAdmin && <span style={adminBadge}>Admin</span>}
+              <span style={userEmail}>{auth.user.email || auth.user.displayName}</span>
+              <button style={logoutBtn} onClick={auth.logout}>Sign out</button>
+            </div>
+          </header>
+        )}
+        {isCompact && auth.idleWarning && (
+          <div style={{ fontSize:11, color:"#f0a000", background:"#f0a00015", borderBottom:"1px solid #f0a00040", padding:"4px 12px", textAlign:"center" }}>
+            ⏱ Signing out in 5 min
           </div>
-        </header>
+        )}
 
-        <nav style={tabBar}>
+        <nav style={isMobile ? { ...tabBar, padding: 0 } : tabBar} className={isMobile ? "h-scroll" : undefined}>
           {TABS.map(t => (
-            <button key={t.id} style={{ ...tabBtn, ...(tab === t.id ? tabBtnActive : {}) }} onClick={() => handleTabChange(t.id)}>
+            <button key={t.id} style={{ ...tabBtn, ...(isMobile ? tabBtnMobile : {}), ...(tab === t.id ? tabBtnActive : {}) }} onClick={() => handleTabChange(t.id)}>
               {t.label}
             </button>
           ))}
         </nav>
 
-        <main style={main}>
+        <main style={isMobile ? { ...main, padding: "0.75rem" } : main}>
           {accessNotice && (
             <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 6, fontSize: 12,
                           background: "#f0a00015", border: "1px solid #f0a00055", color: "#f0a000" }}>
@@ -259,6 +312,10 @@ const userEmail    = { fontSize:12, color:"#8b949e", maxWidth:160, overflow:"hid
 const logoutBtn    = { padding:"4px 10px", background:"transparent", border:"1px solid #30363d", borderRadius:6, color:"#8b949e", fontSize:12, cursor:"pointer" };
 const tabBar       = { display:"flex", borderBottom:"1px solid var(--color-border,#30363d)", background:"var(--color-surface,#161b22)", padding:"0 1rem", flexShrink:0 };
 const tabBtn       = { padding:"10px 16px", border:"none", borderBottom:"2px solid transparent", background:"transparent", color:"#8b949e", fontSize:13, fontWeight:500, cursor:"pointer", transition:"all 0.15s" };
+const tabBtnMobile = { padding:"10px 12px", whiteSpace:"nowrap", flexShrink:0 };
+const menuBtn      = { width:36, height:36, display:"flex", alignItems:"center", justifyContent:"center", background:"transparent", border:"1px solid #30363d", borderRadius:6, color:"#e6edf3", fontSize:16, cursor:"pointer" };
+const menuBackdrop = { position:"fixed", inset:0, top:52, background:"rgba(1,4,9,0.5)", zIndex:-1 };
+const mobileMenu   = { position:"absolute", top:"100%", left:0, right:0, background:"var(--color-surface,#161b22)", borderBottom:"1px solid var(--color-border,#30363d)", padding:"12px 0.75rem", display:"flex", flexDirection:"column", gap:12, boxShadow:"0 8px 24px rgba(0,0,0,0.5)" };
 const tabBtnActive = { color:"#e6edf3", borderBottomColor:"#2ea043" };
 const main         = { flex:1, overflow:"auto", padding:"1.5rem" };
 const denied       = { color:"#f85149", padding:"2rem", fontSize:14 };
