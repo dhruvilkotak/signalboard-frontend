@@ -104,7 +104,7 @@ export default function RolesPanel() {
         Approved users ({users.length}) · Pro: {users.filter(u => u.role === "pro").length}
       </h2>
 
-      <div className="table-scroll"><table style={table}>
+      <table style={table}>
         <thead>
           <tr>{["Name", "Email", "Role", "Action"].map(h => <th key={h} style={th}>{h}</th>)}</tr>
         </thead>
@@ -138,7 +138,7 @@ export default function RolesPanel() {
             );
           })}
         </tbody>
-      </table></div>
+      </table>
     </div>
   );
 }

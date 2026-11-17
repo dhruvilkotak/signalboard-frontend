@@ -1,7 +1,6 @@
 // src/pages/Chat.jsx
 import { useState, useRef, useEffect } from "react";
 import { getToken } from "../lib/api";
-import { useIsMobile } from "../hooks/useIsMobile";
 
 const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 
@@ -145,7 +144,6 @@ export default function Chat({ watchlist = [] }) {
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState(null);
   const bottomRef = useRef(null);
-  const isMobile  = useIsMobile();
   const inputRef  = useRef(null);
 
   useEffect(() => {
@@ -189,7 +187,7 @@ export default function Chat({ watchlist = [] }) {
   return (
     <div style={{
       display: "flex", flexDirection: "column",
-      height: isMobile ? "calc(100dvh - 120px)" : "calc(100vh - 100px)",
+      height: "calc(100vh - 100px)",
       maxWidth: 900, margin: "0 auto", width: "100%",
     }}>
       {/* Context selector */}

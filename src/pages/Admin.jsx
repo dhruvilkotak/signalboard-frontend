@@ -193,7 +193,7 @@ function InviteManager() {
       {invites.length === 0 ? (
         <div style={empty}>No invites yet.</div>
       ) : (
-        <div className="table-scroll"><table style={table}>
+        <table style={table}>
           <thead>
             <tr>
               {["Code", "Email", "Status", "Expires", "Notes", "Action"].map(h => (
@@ -227,7 +227,7 @@ function InviteManager() {
               );
             })}
           </tbody>
-        </table></div>
+        </table>
       )}
     </div>
   );
@@ -691,7 +691,7 @@ function PendingUsers() {
       {users.length === 0 ? (
         <div style={empty}>No pending users. 🎉</div>
       ) : (
-        <div className="table-scroll"><table style={table}>
+        <table style={table}>
           <thead>
             <tr>
               {["Name", "Email", "Provider", "Reason", "Signed Up", "Actions"].map(h => (
@@ -732,7 +732,7 @@ function PendingUsers() {
               </tr>
             ))}
           </tbody>
-        </table></div>
+        </table>
       )}
     </div>
   );
