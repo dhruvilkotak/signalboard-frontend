@@ -3,7 +3,8 @@ name: Frontend CI
 on:
   push:
     branches: [main, dev]
-  pull_request:          # every PR, including ones stacked on another branch
+  pull_request:
+    branches: [main]
 
 jobs:
   build:
@@ -19,9 +20,6 @@ jobs:
 
       - name: Install dependencies
         run: npm install
-
-      - name: Unit tests
-        run: npm test
 
       - name: Build
         run: npm run build

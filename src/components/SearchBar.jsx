@@ -6,7 +6,7 @@ import { useState, useRef } from "react";
 
 const API = import.meta.env.VITE_API_URL || "https://signalboard.duckdns.org";
 
-export default function SearchBar({ watchlist = [], onAdd, onSelect, limit = 25, fullWidth = false, placeholder }) {
+export default function SearchBar({ watchlist = [], onAdd, limit = 25, fullWidth = false }) {
   const [query,   setQuery]   = useState("");
   const [results, setResults] = useState([]);
   const [open,    setOpen]    = useState(false);
@@ -46,12 +46,11 @@ export default function SearchBar({ watchlist = [], onAdd, onSelect, limit = 25,
     }, 150);
   };
 
-  // onSelect mode (new layout): picking a result opens its stock page instead of adding it
-  const atLimit = !onSelect && watchlist.length >= limit;
+  const atLimit = watchlist.length >= limit;
 
   const handleAdd = (symbol) => {
     if (atLimit) return;
-    onSelect ? onSelect(symbol) : onAdd(symbol);
+    onAdd(symbol);
     setQuery("");
     setResults([]);
     setOpen(false);
@@ -67,7 +66,7 @@ export default function SearchBar({ watchlist = [], onAdd, onSelect, limit = 25,
           onChange={handleChange}
           onFocus={() => (results.length > 0 || query.trim()) && setOpen(true)}
           onBlur={handleBlur}
-          placeholder={atLimit ? `Watchlist full (${limit}/${limit})` : (placeholder || "Search by name or symbol…")}
+          placeholder={atLimit ? `Watchlist full (${limit}/${limit})` : "Search by name or symbol…"}
           disabled={atLimit}
           style={{ ...input, opacity: atLimit ? 0.5 : 1, cursor: atLimit ? "not-allowed" : "text" }}
         />
@@ -75,9 +74,9 @@ export default function SearchBar({ watchlist = [], onAdd, onSelect, limit = 25,
       </div>
 
       {/* Watchlist count */}
-      {!onSelect && <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, color: atLimit ? "#e3b341" : "#6e7681", padding: "2px 4px", textAlign: "right" }}>
+      <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, color: atLimit ? "#e3b341" : "#6e7681", padding: "2px 4px", textAlign: "right" }}>
         {watchlist.length}/{limit} symbols{atLimit ? " — remove one to add more" : ""}
-      </div>}
+      </div>
 
       {/* Dropdown */}
       {open && query.trim() && (
@@ -88,7 +87,7 @@ export default function SearchBar({ watchlist = [], onAdd, onSelect, limit = 25,
           {results.length > 0
             ? results.map(r => {
                 const already  = watchlist.includes(r.symbol);
-                const disabled = onSelect ? false : (already || atLimit);
+                const disabled = already || atLimit;
                 const up       = (r.change_pct ?? 0) >= 0;
                 return (
                   <div
@@ -127,12 +126,12 @@ export default function SearchBar({ watchlist = [], onAdd, onSelect, limit = 25,
                     {/* Add / checkmark */}
                     <div style={{
                       ...addBtn,
-                      background: onSelect || already ? "transparent" : "#238636",
-                      border:     onSelect ? "none" : already ? "1px solid #30363d" : "none",
-                      color:      onSelect ? "#8b949e" : already ? "#6e7681" : "#fff",
+                      background: already ? "transparent" : "#238636",
+                      border:     already ? "1px solid #30363d" : "none",
+                      color:      already ? "#6e7681" : "#fff",
                       fontSize:   already ? 13 : 18,
                     }}>
-                      {onSelect ? "›" : already ? "✓" : "+"}
+                      {already ? "✓" : "+"}
                     </div>
                   </div>
                 );
