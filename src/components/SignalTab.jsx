@@ -173,7 +173,7 @@ const BTN = {
   border: "1px solid #1a6336", background: "#0d2a1a", color: "#3fb950", cursor: "pointer",
 };
 
-function ConfirmSpend({ symbol, quota, onGo, onCancel }) {
+function ConfirmSpend({ symbol, quota, unlimited = false, onGo, onCancel }) {
   const [busy, setBusy] = useState(false);
   const weekly = quota?.period === "week";
   const left   = quota?.left;
@@ -185,7 +185,7 @@ function ConfirmSpend({ symbol, quota, onGo, onCancel }) {
         Generate AI signal for {symbol}?
       </div>
 
-      {left != null && (
+      {!unlimited && left != null && (
         <div style={{ display: "inline-block", marginBottom: 12, padding: "6px 12px", borderRadius: 8,
                       background: "#1a1206", border: "1px solid #6b4f06", fontSize: 12, color: "#e3b341" }}>
           ⚡ {left} of {limit} {weekly ? "signals left this week" : "free signals left"}
@@ -193,13 +193,15 @@ function ConfirmSpend({ symbol, quota, onGo, onCancel }) {
       )}
 
       <div style={{ fontSize: 11, color: "#8b949e", lineHeight: 1.6, marginBottom: 6 }}>
-        {left == null
+        {unlimited
+          ? "This runs a new AI analysis for this stock."
+          : left == null
           ? "This uses 1 of your on-demand signals."
           : <>This uses <b style={{ color: "#e3b341" }}>1</b>. You'll have{" "}
               <b style={{ color: "#e6edf3" }}>{left - 1} of {limit}</b> left
               {weekly && resetLabel(quota) ? <> until {resetLabel(quota)}</> : null}.</>}
       </div>
-      {left === 1 && (
+      {!unlimited && left === 1 && (
         <div style={{ fontSize: 10, color: "#f0883e", marginBottom: 6 }}>
           This is your last {weekly ? "signal this week" : "free signal"}.
         </div>
@@ -215,7 +217,7 @@ function ConfirmSpend({ symbol, quota, onGo, onCancel }) {
         </button>
         <button style={{ ...BTN, opacity: busy ? 0.6 : 1 }} disabled={busy}
                 onClick={() => { setBusy(true); onGo(); }}>
-          {busy ? "Generating…" : "Generate · uses 1"}
+          {busy ? "Generating…" : unlimited ? "Generate" : "Generate · uses 1"}
         </button>
       </div>
     </GateCard>
@@ -281,8 +283,11 @@ export default function SignalTab({ symbol, currentPrice, isAdmin = false, activ
       .then(p => {
         done = true;
         if (cancelled) return;
-        if (p?.status === "unlimited" || p?.status === "free") load();
-        else setGate(p);                                   // uses_one | blocked
+        // Only an already-generated signal opens by itself ("free"). Anything that would
+        // run the AI — "uses_one", and "unlimited" plans too — waits for a click, so
+        // opening a page never runs up the AI bill.
+        if (p?.status === "free") load();
+        else setGate(p);                                   // uses_one | unlimited | blocked
       })
       .catch(() => {                                       // can't tell — ask, to be safe
         done = true;
@@ -319,7 +324,8 @@ export default function SignalTab({ symbol, currentPrice, isAdmin = false, activ
 
   // ── Quota gate ─────────────────────────────────────────────────────────────
   if (gate === "checking") return <Skeleton symbol={symbol} />;
-  if (gate?.status === "uses_one") return <ConfirmSpend symbol={symbol} quota={gate.quota} onGo={load} onCancel={onCancel} />;
+  if (gate?.status === "uses_one" || gate?.status === "unlimited")
+    return <ConfirmSpend symbol={symbol} quota={gate.quota} unlimited={gate.status === "unlimited"} onGo={load} onCancel={onCancel} />;
   if (gate?.status === "blocked")  return <NoneLeft symbol={symbol} gate={gate} />;
 
   // ── Loading state ──────────────────────────────────────────────────────────
