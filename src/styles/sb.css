@@ -122,3 +122,7 @@ body { background: var(--sb-bg); }
 
 /* Legacy pages rendered inside the new shell */
 .sb-legacy { padding-top: 8px; }
+
+
+/* Dark only — tells the browser to draw form controls and scrollbars dark too. */
+:root { color-scheme: dark; }

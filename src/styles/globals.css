@@ -121,12 +121,7 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg0: #f6f8fa; --bg1: #ffffff; --bg2: #f6f8fa; --bg3: #eaeef2;
-    --border: #d0d7de; --text1: #1f2328; --text2: #656d76; --text3: #9198a1;
-  }
-}
+/* Dark only: the app has no light theme (see styles/sb.css). */
 
 /* ── Auto-Trader page ────────────────────────────────────────────────────── */
 
